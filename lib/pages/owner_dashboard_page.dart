@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/owner_map.dart';
 
 class OwnerDashboardPage extends StatelessWidget {
   const OwnerDashboardPage({super.key});
@@ -6,13 +7,10 @@ class OwnerDashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Owner Dashboard")),
-      body: const Center(
-        child: Text(
-          "You are logged in 🎉",
-          style: TextStyle(fontSize: 22),
-        ),
+      appBar: AppBar(
+        title: const Text("Laari Booking Platform"),
       ),
+      body: const OwnerMap(),
     );
   }
 }

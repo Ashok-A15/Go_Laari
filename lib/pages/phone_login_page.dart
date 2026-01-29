@@ -132,6 +132,8 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> with SingleTickerProvid
                                 phoneNumber: "+91${phoneController.text}",
                                 verificationCompleted: (credential) async {
                                   await _auth.signInWithCredential(credential);
+                                  if (!mounted) return;
+                                  // ignore: use_build_context_synchronously
                                   Navigator.pushReplacement(
                                     context,
                                     MaterialPageRoute(
@@ -140,15 +142,21 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> with SingleTickerProvid
                                   );
                                 },
                                 verificationFailed: (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(e.message ?? "Error")),
-                                  );
+                                  if (mounted) {
+                                    // ignore: use_build_context_synchronously
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(e.message ?? "Error")),
+                                    );
+                                  }
                                 },
                                 codeSent: (id, _) {
                                   verificationId = id;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("OTP Sent")),
-                                  );
+                                  if (mounted) {
+                                    // ignore: use_build_context_synchronously
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("OTP Sent")),
+                                    );
+                                  }
                                 },
                                 codeAutoRetrievalTimeout: (_) {},
                               );
@@ -194,6 +202,8 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> with SingleTickerProvid
 
                           await _auth.signInWithCredential(cred);
 
+                          if (!mounted) return;
+                          // ignore: use_build_context_synchronously
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
@@ -201,9 +211,12 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> with SingleTickerProvid
                             ),
                           );
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Error: $e")),
-                          );
+                          if (mounted) {
+                            // ignore: use_build_context_synchronously
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Error: $e")),
+                            );
+                          }
                         }
                       },
                       child: const Text("Verify OTP"),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_page.dart';
+import 'owner_main_page.dart';
 import 'signup_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -21,9 +21,9 @@ class _LoginPageState extends State<LoginPage>
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  AnimationController? _animationController;
-  Animation<double>? _fadeAnimation;
-  Animation<Offset>? _slideAnimation;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
@@ -35,26 +35,26 @@ class _LoginPageState extends State<LoginPage>
     );
 
     _fadeAnimation = CurvedAnimation(
-      parent: _animationController!,
+      parent: _animationController,
       curve: Curves.easeIn,
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
+      begin: const Offset(0, 0.15),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
-        parent: _animationController!,
+        parent: _animationController,
         curve: Curves.easeOut,
       ),
     );
 
-    _animationController!.forward();
+    _animationController.forward();
   }
 
   @override
   void dispose() {
-    _animationController?.dispose();
+    _animationController.dispose();
     emailController.dispose();
     passController.dispose();
     super.dispose();
@@ -76,9 +76,12 @@ class _LoginPageState extends State<LoginPage>
         password: passController.text.trim(),
       );
 
+      // ✅ GO TO MAIN PAGE WITH BOTTOM NAV
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const DashboardPage()),
+        MaterialPageRoute(
+          builder: (_) => const OwnerMainPage(),
+        ),
       );
     } on FirebaseAuthException catch (e) {
       String msg = "Login failed";
@@ -94,7 +97,8 @@ class _LoginPageState extends State<LoginPage>
     setState(() => _isLoading = false);
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
+  InputDecoration _inputDecoration(String label, IconData icon,
+      {bool isPassword = false}) {
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon),
@@ -104,6 +108,20 @@ class _LoginPageState extends State<LoginPage>
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
+      suffixIcon: isPassword
+          ? IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility
+                    : Icons.visibility_off,
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+            )
+          : null,
     );
   }
 
@@ -124,9 +142,9 @@ class _LoginPageState extends State<LoginPage>
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: FadeTransition(
-              opacity: _fadeAnimation!,
+              opacity: _fadeAnimation,
               child: SlideTransition(
-                position: _slideAnimation!,
+                position: _slideAnimation,
                 child: Card(
                   elevation: 12,
                   shape: RoundedRectangleBorder(
@@ -150,7 +168,8 @@ class _LoginPageState extends State<LoginPage>
                         TextField(
                           controller: emailController,
                           keyboardType: TextInputType.emailAddress,
-                          decoration: _inputDecoration("Email", Icons.email),
+                          decoration:
+                              _inputDecoration("Email", Icons.email),
                         ),
 
                         const SizedBox(height: 16),
@@ -158,20 +177,10 @@ class _LoginPageState extends State<LoginPage>
                         TextField(
                           controller: passController,
                           obscureText: _obscurePassword,
-                          decoration: _inputDecoration("Password", Icons.lock)
-                              .copyWith(
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                            ),
+                          decoration: _inputDecoration(
+                            "Password",
+                            Icons.lock,
+                            isPassword: true,
                           ),
                         ),
 
