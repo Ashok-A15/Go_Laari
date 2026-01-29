@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'owner_main_page.dart';
-import 'signup_page.dart';
+import 'dashboard_page.dart'; // Assuming drivers also go to dashboard for now, or a specific driver page if available
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class DriverLoginPage extends StatefulWidget {
+  const DriverLoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<DriverLoginPage> createState() => _DriverLoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage>
+class _DriverLoginPageState extends State<DriverLoginPage>
     with SingleTickerProviderStateMixin {
 
   final TextEditingController emailController = TextEditingController();
@@ -76,11 +75,11 @@ class _LoginPageState extends State<LoginPage>
         password: passController.text.trim(),
       );
 
-      // ✅ GO TO MAIN PAGE WITH BOTTOM NAV
+      // ✅ GO TO DASHBOARD (or specific driver page)
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const OwnerMainPage(),
+          builder: (_) => const DashboardPage(),
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -165,7 +164,7 @@ class _LoginPageState extends State<LoginPage>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Text(
-                          "Owner Login",
+                          "Driver Login",
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
@@ -220,29 +219,8 @@ class _LoginPageState extends State<LoginPage>
                                   ),
                           ),
                         ),
-
-                        const SizedBox(height: 20),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text("Don’t have an account?"),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const SignupPage(),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                "Sign Up",
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
+                        
+                        const SizedBox(height: 10),
                       ],
                     ),
                   ),

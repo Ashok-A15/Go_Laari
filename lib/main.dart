@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 // Pages
+import 'pages/role_selection_page.dart';
 import 'pages/welcome_auth_page.dart';
 import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
@@ -55,8 +56,8 @@ class GoLorryOwnerApp extends StatelessWidget {
         "/dashboard": (_) => const OwnerDashboardPage(),
       },
 
-      // 👉 App starts from Lamp Login Screen
-      home: const LoginPage(),
+      // 👉 App starts from Role Selection Screen
+      home: const RoleSelectionPage(),
     );
   }
 }
