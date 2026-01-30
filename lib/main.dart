@@ -9,6 +9,7 @@ import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/owner_dashboard_page.dart';
 import 'pages/owner_main_page.dart';
+import 'pages/splash_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Global Theme Notifier for Dark Mode
@@ -45,21 +46,8 @@ class GoLorryOwnerApp extends StatelessWidget {
             "/dashboard": (_) => const OwnerDashboardPage(),
           },
 
-          // 👉 Auth Persistence Wrap
-          home: StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasData) {
-                return const OwnerMainPage();
-              }
-              return const RoleSelectionPage();
-            },
-          ),
+          // 👉 Splash Screen (Handles Auth Persistence internally)
+          home: const SplashScreen(),
         );
       },
     );
