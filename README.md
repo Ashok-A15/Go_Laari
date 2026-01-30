@@ -1,3 +1,3 @@
-# flutter_project_1
+# GoLorry
 
 A new Flutter project.
