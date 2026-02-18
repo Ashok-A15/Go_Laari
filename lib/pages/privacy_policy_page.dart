@@ -71,9 +71,9 @@ class PrivacyPolicyPage extends StatelessWidget {
   Widget _buildPolicySection(String title, String content) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 30),
-      child: Column(
+      child: Column( 
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+         children: [
           Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF185A9D))),
           const SizedBox(height: 12),
           Text(content, style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.grey)),
@@ -82,3 +82,4 @@ class PrivacyPolicyPage extends StatelessWidget {
     );
   }
 }
+    
