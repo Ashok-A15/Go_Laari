@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'owner_main_page.dart';
 import 'signup_page.dart';
+import '../services/firestore_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -63,7 +64,12 @@ class _LoginPageState extends State<LoginPage>
   Future<void> _login() async {
     if (emailController.text.isEmpty || passController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email & Password required")),
+        SnackBar(
+          content: const Text("Email & Password required"),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          backgroundColor: Colors.red.shade600,
+        ),
       );
       return;
     }
@@ -76,24 +82,153 @@ class _LoginPageState extends State<LoginPage>
         password: passController.text.trim(),
       );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const OwnerMainPage(),
-        ),
-      );
+      // Clear cached role so it re-fetches for the new user
+      FirestoreService().clearCache();
+      final role = await FirestoreService().getUserRole();
+
+      if (!mounted) return;
+
+      if (role == 'owner') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const OwnerMainPage()),
+        );
+      } else {
+        // Not an owner — sign out and show error
+        await _auth.signOut();
+        FirestoreService().clearCache();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("This account is not an owner. Use Driver Login instead."),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: Colors.orange.shade700,
+          ),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       String msg = "Login failed";
 
       if (e.code == 'user-not-found') msg = "No account found";
       if (e.code == 'wrong-password') msg = "Incorrect password";
       if (e.code == 'invalid-email') msg = "Invalid email";
+      if (e.code == 'invalid-credential') msg = "Invalid email or password";
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(msg)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: $e"),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _forgotPassword() {
+    final resetEmailController = TextEditingController(text: emailController.text);
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text("Reset Password", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text("We'll send a password reset link to your email", style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 24),
+              TextField(
+                controller: resetEmailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: "Email Address",
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (resetEmailController.text.trim().isEmpty) return;
+                    try {
+                      await FirestoreService().sendPasswordReset(resetEmailController.text.trim());
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: const Text("Password reset link sent! Check your email."),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            backgroundColor: const Color(0xFF43CEA2),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: Text("Error: ${e.toString()}"),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            backgroundColor: Colors.red.shade600,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF185A9D),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  ),
+                  child: const Text("Send Reset Link", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -193,7 +328,7 @@ class _LoginPageState extends State<LoginPage>
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () {},
+                                onPressed: _forgotPassword,
                                 child: const Text("Forgot Password?"),
                               ),
                             ),
@@ -210,7 +345,10 @@ class _LoginPageState extends State<LoginPage>
                                   ),
                                 ),
                                 child: _isLoading
-                                    ? const CircularProgressIndicator(color: Colors.white)
+                                    ? const SizedBox(
+                                        height: 22, width: 22,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                      )
                                     : const Text(
                                         "Login",
                                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -225,7 +363,7 @@ class _LoginPageState extends State<LoginPage>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text("Don’t have an account? ", style: TextStyle(color: Colors.white70)),
+                        const Text("Don't have an account? ", style: TextStyle(color: Colors.white70)),
                         GestureDetector(
                           onTap: () {
                             Navigator.push(

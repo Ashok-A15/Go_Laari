@@ -1,25 +1,23 @@
 import 'package:flutter/material.dart';
-import 'owner_dashboard_page.dart';
-import 'profile_page.dart';
-import 'settings_page.dart';
-import 'drivers_page.dart';
+import 'dashboard_page.dart';
 import 'bookings_page.dart';
+import 'driver_profile_page.dart';
+import 'settings_page.dart';
 
-class OwnerMainPage extends StatefulWidget {
-  const OwnerMainPage({super.key});
+class DriverMainPage extends StatefulWidget {
+  const DriverMainPage({super.key});
 
   @override
-  State<OwnerMainPage> createState() => _OwnerMainPageState();
+  State<DriverMainPage> createState() => _DriverMainPageState();
 }
 
-class _OwnerMainPageState extends State<OwnerMainPage> {
+class _DriverMainPageState extends State<DriverMainPage> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
-    OwnerDashboardPage(),
-    DriversPage(),
+    DashboardPage(),
     BookingsPage(),
-    ProfilePage(),
+    DriverProfilePage(),
     SettingsPage(),
   ];
 
@@ -50,10 +48,9 @@ class _OwnerMainPageState extends State<OwnerMainPage> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(0, Icons.dashboard_rounded, "Home"),
-              _buildNavItem(1, Icons.local_shipping_rounded, "Drivers"),
-              _buildNavItem(2, Icons.receipt_long_rounded, "Bookings"),
-              _buildNavItem(3, Icons.person_rounded, "Profile"),
-              _buildNavItem(4, Icons.settings_rounded, "Settings"),
+              _buildNavItem(1, Icons.history_rounded, "History"),
+              _buildNavItem(2, Icons.person_rounded, "Profile"),
+              _buildNavItem(3, Icons.settings_rounded, "Settings"),
             ],
           ),
         ),
@@ -73,7 +70,7 @@ class _OwnerMainPageState extends State<OwnerMainPage> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: EdgeInsets.symmetric(horizontal: isSelected ? 14 : 10, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF43CEA2).withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
@@ -83,18 +80,18 @@ class _OwnerMainPageState extends State<OwnerMainPage> {
           children: [
             Icon(
               icon,
-              size: 22,
+              size: 24,
               color: isSelected ? const Color(0xFF43CEA2) : Colors.grey,
             ),
             if (isSelected)
               Padding(
-                padding: const EdgeInsets.only(left: 6),
+                padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   label,
                   style: TextStyle(
                     color: isDark ? Colors.white : const Color(0xFF185A9D),
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 13,
                   ),
                 ),
               ),

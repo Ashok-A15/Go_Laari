@@ -7,7 +7,6 @@ import 'change_password_page.dart';
 import 'notification_settings_page.dart';
 import 'help_center_page.dart';
 import 'privacy_policy_page.dart';
-import 'dashboard_page.dart';
 import '../services/firestore_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -40,31 +39,14 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final isDark = themeNotifier.value == ThemeMode.dark;
     
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) {
-        if (didPop) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardPage()),
-        );
-      },
-      child: Scaffold(
+    return Scaffold(
         body: CustomScrollView(
           slivers: [
             SliverAppBar(
               expandedHeight: 120.0,
               floating: false,
               pinned: true,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DashboardPage()),
-                  );
-                },
-              ),
+              automaticallyImplyLeading: false,
               flexibleSpace: FlexibleSpaceBar(
                 title: const Text(
                   "Settings",
@@ -193,9 +175,9 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
             ),
           ],
         ),
-      ),
     );
   }
+
 
   void _navigateTo(Widget page) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));

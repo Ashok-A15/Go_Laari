@@ -5,7 +5,7 @@ import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'role_selection_page.dart';
 import 'owner_main_page.dart';
-import 'dashboard_page.dart';
+import 'driver_main_page.dart';
 import '../services/firestore_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -81,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       if (role == 'owner') {
         nextPage = const OwnerMainPage();
       } else {
-        nextPage = const DashboardPage();
+        nextPage = const DriverMainPage();
       }
     }
 

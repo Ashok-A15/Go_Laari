@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_page.dart';
+import 'driver_main_page.dart';
 import '../services/firestore_service.dart';
 
 class DriverLoginPage extends StatefulWidget {
@@ -63,7 +63,12 @@ class _DriverLoginPageState extends State<DriverLoginPage>
   Future<void> _login() async {
     if (emailController.text.isEmpty || passController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email & Password required")),
+        SnackBar(
+          content: const Text("Email & Password required"),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          backgroundColor: Colors.red.shade600,
+        ),
       );
       return;
     }
@@ -76,28 +81,64 @@ class _DriverLoginPageState extends State<DriverLoginPage>
         password: passController.text.trim(),
       );
 
-      await FirestoreService().updateLastLogin();
+      // Clear cached role and verify this is a driver
+      FirestoreService().clearCache();
+      final role = await FirestoreService().getUserRole();
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const DashboardPage(),
-        ),
-      );
+      if (role == 'driver') {
+        await FirestoreService().updateLastLogin();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DriverMainPage()),
+        );
+      } else {
+        // Not a driver — sign out and show error
+        await _auth.signOut();
+        FirestoreService().clearCache();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("This account is not a driver. Use Owner Login instead."),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: Colors.orange.shade700,
+          ),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       String msg = "Login failed";
 
       if (e.code == 'user-not-found') msg = "No account found";
       if (e.code == 'wrong-password') msg = "Incorrect password";
       if (e.code == 'invalid-email') msg = "Invalid email";
+      if (e.code == 'invalid-credential') msg = "Invalid email or password";
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(msg)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: $e"),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -170,7 +211,7 @@ class _DriverLoginPageState extends State<DriverLoginPage>
                               controller: emailController,
                               keyboardType: TextInputType.emailAddress,
                               decoration: const InputDecoration(
-                                labelText: "Driver Email",
+                                labelText: "Driver Email / ID",
                                 prefixIcon: Icon(Icons.email_outlined),
                               ),
                             ),
@@ -206,7 +247,10 @@ class _DriverLoginPageState extends State<DriverLoginPage>
                                   ),
                                 ),
                                 child: _isLoading
-                                    ? const CircularProgressIndicator(color: Colors.white)
+                                    ? const SizedBox(
+                                        height: 22, width: 22,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                      )
                                     : const Text(
                                         "Login",
                                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),

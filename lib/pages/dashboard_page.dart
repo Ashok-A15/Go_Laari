@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
-import '../widgets/bottom_nav.dart';
 import '../widgets/owner_map.dart';
 import '../services/firestore_service.dart';
 import 'settings_page.dart';
@@ -16,23 +14,39 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
   String userName = "User";
   bool _isOwner = false;
   bool _isLoading = true;
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription<Position>? _locationSubscription;
+  Map<String, int> _fleetStats = {'total': 0, 'active': 0, 'idle': 0};
+
+  late AnimationController _animController;
 
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _loadDashboardData();
   }
 
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _animController.dispose();
     super.dispose();
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
   }
 
   void _startLocationSharing() {
@@ -55,34 +69,57 @@ class _DashboardPageState extends State<DashboardPage> {
     final role = await _firestoreService.getUserRole();
     final collection = role == 'owner' ? 'owners' : 'drivers';
 
-    final snap = await FirebaseFirestore.instance
-        .collection(collection)
-        .doc(user.uid)
-        .get();
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(collection)
+          .doc(user.uid)
+          .get();
 
-    if (mounted) {
-      setState(() {
-        userName = snap.exists ? (snap.data()?["name"] ?? "User") : "User";
-        _isOwner = role == 'owner';
-        _isLoading = false;
-      });
-      
-      if (role == 'driver') {
-        _startLocationSharing();
+      Map<String, int> stats = {'total': 0, 'active': 0, 'idle': 0};
+      if (role == 'owner') {
+        stats = await _firestoreService.getFleetStats();
+      }
+
+      if (mounted) {
+        setState(() {
+          userName = snap.exists ? (snap.data()?["name"] ?? "User") : "User";
+          _isOwner = role == 'owner';
+          _fleetStats = stats;
+          _isLoading = false;
+        });
+        _animController.forward();
+        
+        if (role == 'driver') {
+          _startLocationSharing();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _animController.forward();
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0F171A) : const Color(0xFFF8FAF9),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
       extendBody: true,
+      backgroundColor: isDark ? const Color(0xFF0F171A) : const Color(0xFFF8FAF9),
       appBar: AppBar(
         title: Text(_isOwner ? "Owner Dashboard" : "Driver Dashboard"),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
@@ -91,106 +128,153 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(width: 10),
         ],
       ),
-      bottomNavigationBar: const BottomNavBar(currentIndex: 0),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor: const Color(0xFF43CEA2).withOpacity(0.2),
-                  child: Text(
-                    userName.isNotEmpty ? userName[0] : "U",
-                    style: const TextStyle(
-                      color: Color(0xFF185A9D),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
+      body: FadeTransition(
+        opacity: _animController,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Greeting card
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF1E272E), const Color(0xFF2C3E50)]
+                        : [const Color(0xFF43CEA2), const Color(0xFF185A9D)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ),
-                const SizedBox(width: 15),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Welcome back,",
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF185A9D).withOpacity(0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
                     ),
-                    Text(
-                      userName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                      ),
+                      child: CircleAvatar(
+                        radius: 25,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        child: Text(
+                          userName.isNotEmpty ? userName[0].toUpperCase() : "U",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${_getGreeting()} 👋",
+                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
+                          ),
+                          Text(
+                            userName,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _isOwner ? "Owner" : "Driver",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            if (_isOwner) ...[
-              const Text(
-                "Fleet Overview",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 15),
-              SizedBox(
-                height: 120,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _statCard("₹45,600", "Earnings", Icons.account_balance_wallet_rounded, 
-                        [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
-                    _statCard("5", "Laaris", Icons.local_shipping_rounded, 
-                        [const Color(0xFF6dd5ed), const Color(0xFF2193b0)]),
-                    _statCard("7", "Drivers", Icons.people_rounded, 
-                        [const Color(0xFFff9966), const Color(0xFFff5e62)]),
-                  ],
+              const SizedBox(height: 25),
+
+              if (_isOwner) ...[
+                const Text(
+                  "Fleet Overview",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              ),
-              const SizedBox(height: 30),
-            ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _isOwner ? "Active Tracking" : "My Current Location",
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                if (_isOwner)
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text("View All"),
+                const SizedBox(height: 15),
+                SizedBox(
+                  height: 120,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _statCard("${_fleetStats['total']}", "Total Laaris", Icons.local_shipping_rounded, 
+                          [const Color(0xFF6dd5ed), const Color(0xFF2193b0)]),
+                      _statCard("${_fleetStats['active']}", "Active", Icons.play_arrow_rounded, 
+                          [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
+                      _statCard("${_fleetStats['idle']}", "Idle", Icons.pause_circle_rounded, 
+                          [const Color(0xFFff9966), const Color(0xFFff5e62)]),
+                    ],
                   ),
+                ),
+                const SizedBox(height: 30),
               ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              height: 300,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _isOwner ? "Active Tracking" : "My Current Location",
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
+                  if (_isOwner)
+                    TextButton(
+                      onPressed: () {},
+                      child: const Text("View All"),
+                    ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: const OwnerMap(),
+              const SizedBox(height: 10),
+              Container(
+                height: 300,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: const OwnerMap(),
+                ),
               ),
-            ),
-            if (!_isOwner) ...[
-              const SizedBox(height: 30),
-              _buildTakeJobButton(),
+
+              if (!_isOwner) ...[
+                const SizedBox(height: 30),
+                _buildTakeJobButton(),
+              ],
+              const SizedBox(height: 100),
             ],
-            const SizedBox(height: 100),
-          ],
+          ),
         ),
       ),
     );
@@ -263,7 +347,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _statCard(String value, String title, IconData icon, List<Color> gradient) {
     return Container(
-      width: 160,
+      width: 140,
       margin: const EdgeInsets.only(right: 15),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -292,7 +376,7 @@ class _DashboardPageState extends State<DashboardPage> {
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -301,7 +385,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 title,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.9),
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
               ),
             ],

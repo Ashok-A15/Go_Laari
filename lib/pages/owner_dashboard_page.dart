@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/owner_map.dart';
+import '../services/firestore_service.dart';
 
 class OwnerDashboardPage extends StatefulWidget {
   const OwnerDashboardPage({super.key});
@@ -10,6 +11,19 @@ class OwnerDashboardPage extends StatefulWidget {
 
 class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
   final GlobalKey<OwnerMapState> _mapKey = GlobalKey<OwnerMapState>();
+  final FirestoreService _firestoreService = FirestoreService();
+  Map<String, int> _fleetStats = {'total': 0, 'active': 0, 'idle': 0};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFleetStats();
+  }
+
+  Future<void> _loadFleetStats() async {
+    final stats = await _firestoreService.getFleetStats();
+    if (mounted) setState(() => _fleetStats = stats);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +35,10 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
         children: [
           OwnerMap(
             key: _mapKey,
-            showDefaultLocationButton: false, // We use the dashboard button
+            showDefaultLocationButton: false,
           ),
           
+          // Fleet Status Card
           Positioned(
             top: MediaQuery.of(context).padding.top + 20,
             left: 20,
@@ -61,21 +76,37 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                           "Fleet Status",
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
                         ),
-                        const Text(
-                          "5 Laaris Active • 2 Idle",
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        Text(
+                          "${_fleetStats['active']} Active • ${_fleetStats['idle']} Idle",
+                          style: const TextStyle(color: Colors.grey, fontSize: 13),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+                  // Compact stat badges
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF43CEA2).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "${_fleetStats['total']} Total",
+                      style: const TextStyle(
+                        color: Color(0xFF43CEA2),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
           
+          // Action buttons
           Positioned(
-            bottom: 120, // Above floating bottom nav
+            bottom: 120,
             right: 20,
             child: Column(
               children: [
@@ -83,9 +114,11 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                   _mapKey.currentState?.animateToCurrentLocation();
                 }),
                 const SizedBox(height: 12),
-                _buildActionButton(context, Icons.layers_rounded, () {}),
+                _buildActionButton(context, Icons.refresh_rounded, () {
+                  _loadFleetStats();
+                }),
                 const SizedBox(height: 12),
-                _buildActionButton(context, Icons.add_rounded, () {}, primary: true),
+                _buildActionButton(context, Icons.layers_rounded, () {}),
               ],
             ),
           ),
