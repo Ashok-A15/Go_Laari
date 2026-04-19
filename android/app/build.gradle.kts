@@ -56,7 +56,6 @@ android {
             signingConfig = if (keyPropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                // Fallback to debug keys when key.properties is not present locally
                 signingConfigs.getByName("debug")
             }
             isMinifyEnabled = false
