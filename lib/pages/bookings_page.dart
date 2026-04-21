@@ -148,7 +148,7 @@ class _BookingsPageState extends State<BookingsPage>
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'confirmed': return Colors.green;
+      case 'accepted': return Colors.green;
       case 'in transit': return Colors.blue;
       case 'pending': return Colors.orange;
       case 'cancelled': return Colors.red;
@@ -159,13 +159,19 @@ class _BookingsPageState extends State<BookingsPage>
 
   IconData _getStatusIcon(String status) {
     switch (status.toLowerCase()) {
-      case 'confirmed': return Icons.check_circle_rounded;
+      case 'accepted': return Icons.check_circle_rounded;
       case 'in transit': return Icons.moving_rounded;
       case 'pending': return Icons.access_time_filled_rounded;
       case 'cancelled': return Icons.cancel_rounded;
       case 'completed': return Icons.task_alt_rounded;
       default: return Icons.local_shipping_rounded;
     }
+  }
+
+  // Capitalize first letter of each word for display
+  String _capitalize(String s) {
+    if (s.isEmpty) return s;
+    return s.split(' ').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
   }
 
   @override
@@ -199,12 +205,12 @@ class _BookingsPageState extends State<BookingsPage>
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: ["all", "Confirmed", "Pending", "In Transit", "Completed", "Cancelled"].map((s) {
+              children: ["all", "accepted", "pending", "in transit", "completed", "cancelled"].map((s) {
                 final isSelected = _filterStatus == s;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
-                    label: Text(s == "all" ? "All" : s),
+                    label: Text(s == "all" ? "All" : _capitalize(s)),
                     selected: isSelected,
                     selectedColor: const Color(0xFF43CEA2).withOpacity(0.15),
                     checkmarkColor: const Color(0xFF185A9D),
@@ -226,9 +232,11 @@ class _BookingsPageState extends State<BookingsPage>
 
                 final docs = snapshot.data?.docs ?? [];
 
-                final filtered = _filterStatus == "all" 
-                    ? docs 
-                    : docs.where((d) => d.data()['status'] == _filterStatus).toList();
+                final filtered = _filterStatus == "all"
+                    ? docs
+                    : docs.where((d) =>
+                        (d.data()['status'] ?? '').toString().toLowerCase() == _filterStatus
+                      ).toList();
 
                 if (filtered.isEmpty) {
                   return _buildEmptyState();
@@ -247,9 +255,9 @@ class _BookingsPageState extends State<BookingsPage>
 
                       return _buildBookingCard(
                         context: context,
-                        route: data['route'] ?? 'Unknown Route',
+                        route: data['route'] ?? data['pickupAddress'] ?? 'Unknown Route',
                         distance: data['distance'] ?? '',
-                        price: data['price'] ?? '0',
+                        price: (data['totalFare'] ?? data['price'] ?? '0').toString(),
                         status: status,
                         statusColor: statusColor,
                         icon: _getStatusIcon(status),
@@ -377,7 +385,7 @@ class _BookingsPageState extends State<BookingsPage>
                   children: [
                     Container(width: 8, height: 8, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
                     const SizedBox(width: 8),
-                    Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(_capitalize(status), style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
                 PopupMenuButton<String>(
@@ -398,8 +406,8 @@ class _BookingsPageState extends State<BookingsPage>
                     ),
                   ),
                   onSelected: (val) => onStatusChange(val),
-                  itemBuilder: (_) => ["Confirmed", "Pending", "In Transit", "Completed", "Cancelled"]
-                      .map((s) => PopupMenuItem(value: s, child: Text(s)))
+                  itemBuilder: (_) => ["accepted", "pending", "in transit", "completed", "cancelled"]
+                      .map((s) => PopupMenuItem(value: s, child: Text(_capitalize(s))))
                       .toList(),
                 ),
               ],

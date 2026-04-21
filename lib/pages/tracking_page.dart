@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TrackingPage extends StatefulWidget {
   const TrackingPage({super.key});
@@ -11,6 +14,10 @@ class TrackingPage extends StatefulWidget {
 
 class _TrackingPageState extends State<TrackingPage> {
   GoogleMapController? _mapController;
+  LatLng? _customerLocation;
+  String _customerAddress = "Searching for customer...";
+  String _status = "ON DUTY";
+  String _customerId = "";
 
   static const CameraPosition _startLocation = CameraPosition(
     target: LatLng(22.7196, 75.8577), 
@@ -21,6 +28,55 @@ class _TrackingPageState extends State<TrackingPage> {
   void initState() {
     super.initState();
     _checkPermission();
+    _fetchActiveJob();
+  }
+
+  Future<void> _fetchActiveJob() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    
+    // Find active booking for driver
+    final snap = await FirebaseFirestore.instance.collection('bookings')
+        .where('driverId', isEqualTo: uid)
+        .where('status', whereIn: ['Confirmed', 'In Transit'])
+        .limit(1)
+        .get();
+        
+    if (snap.docs.isNotEmpty) {
+      final doc = snap.docs.first;
+      final data = doc.data();
+      String pickup = data['pickupAddress'] ?? data['route'] ?? 'Unknown location';
+      
+      setState(() {
+        _customerAddress = pickup;
+        _status = data['status'] == 'Confirmed' ? 'TO PICKUP' : 'IN TRANSIT';
+      });
+
+      // Try to geocode
+      try {
+        List<Location> locations = await locationFromAddress(pickup);
+        if (locations.isNotEmpty) {
+          setState(() {
+            _customerLocation = LatLng(locations.first.latitude, locations.first.longitude);
+          });
+          
+          if (_mapController != null) {
+            _mapController!.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(target: _customerLocation!, zoom: 15)
+              )
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint("Geocoding failed for $pickup: $e");
+      }
+    } else {
+      setState(() {
+        _customerAddress = "No active trip";
+        _status = "IDLE";
+      });
+    }
   }
 
   Future<void> _checkPermission() async {
@@ -51,9 +107,21 @@ class _TrackingPageState extends State<TrackingPage> {
 
   @override
   Widget build(BuildContext context) {
+    Set<Marker> markers = {};
+    if (_customerLocation != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('customer'),
+          position: _customerLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: const InfoWindow(title: "Customer Location"),
+        )
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Live Tracking"),
+        title: const Text("Customer Location Map"),
       ),
       body: Stack(
         children: [
@@ -61,7 +129,13 @@ class _TrackingPageState extends State<TrackingPage> {
             initialCameraPosition: _startLocation,
             onMapCreated: (controller) {
               _mapController = controller;
+              if (_customerLocation != null) {
+                controller.animateCamera(CameraUpdate.newCameraPosition(
+                  CameraPosition(target: _customerLocation!, zoom: 15)
+                ));
+              }
             },
+            markers: markers,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
@@ -85,9 +159,12 @@ class _TrackingPageState extends State<TrackingPage> {
                 children: [
                   const Icon(Icons.search_rounded, color: Colors.grey),
                   const SizedBox(width: 10),
-                  Text("Searching for Laari #12...", style: TextStyle(color: Colors.grey.shade600)),
-                  const Spacer(),
-                  const CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Color(0xFF43CEA2))),
+                  Expanded(
+                    child: Text(_customerAddress, 
+                      style: TextStyle(color: Colors.grey.shade600),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -142,15 +219,15 @@ class _TrackingPageState extends State<TrackingPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Amit Kumar", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text("Driver ID: #DR9821", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                            const Text("Customer Info", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text("Customer details hidden", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                           ],
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                        child: const Text("ON DUTY", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                        child: Text(_status, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
                   ),
@@ -159,9 +236,7 @@ class _TrackingPageState extends State<TrackingPage> {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      _infoItem(Icons.location_on_rounded, "Current Location", "Near City Center"),
-                      const Spacer(),
-                      _infoItem(Icons.speed_rounded, "Speed", "24 km/h"),
+                      Expanded(child: _infoItem(Icons.route_rounded, "Destination", _customerAddress)),
                     ],
                   ),
                   const SizedBox(height: 30),
@@ -171,7 +246,7 @@ class _TrackingPageState extends State<TrackingPage> {
                         child: ElevatedButton.icon(
                           onPressed: () {},
                           icon: const Icon(Icons.call_rounded, color: Colors.white),
-                          label: const Text("Call Driver", style: TextStyle(color: Colors.white)),
+                          label: const Text("Call Customer", style: TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF185A9D)),
                         ),
                       ),

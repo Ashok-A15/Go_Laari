@@ -86,7 +86,8 @@ class _SignupPageState extends State<SignupPage>
 
       final uid = userCredential.user!.uid;
 
-      await _firestore.collection("owners").doc(uid).set({
+      await _firestore.collection("users").doc(uid).set({
+        "role": "owner",
         "name": nameController.text.trim(),
         "email": emailController.text.trim(),
         "phone": phoneController.text.trim(),

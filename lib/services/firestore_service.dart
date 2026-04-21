@@ -21,20 +21,18 @@ class FirestoreService {
     if (currentUid.isEmpty) return "guest";
 
     try {
-      // Check owners collection
-      final ownerDoc = await _db.collection('owners').doc(currentUid).get();
-      if (ownerDoc.exists) {
-        _cachedRole = 'owner';
-        _cachedOwnerId = currentUid;
-        return 'owner';
-      }
-
-      // Check drivers collection
-      final driverDoc = await _db.collection('drivers').doc(currentUid).get();
-      if (driverDoc.exists) {
-        _cachedRole = 'driver';
-        _cachedOwnerId = driverDoc.data()?['ownerId'];
-        return 'driver';
+      final userDoc = await _db.collection('users').doc(currentUid).get();
+      if (userDoc.exists) {
+        _cachedRole = userDoc.data()?['role'] ?? 'unknown';
+        if (_cachedRole == 'owner') {
+          _cachedOwnerId = currentUid;
+        } else if (_cachedRole == 'driver') {
+          final driverDoc = await _db.collection('drivers').doc(currentUid).get();
+          if (driverDoc.exists) {
+            _cachedOwnerId = driverDoc.data()?['ownerId'];
+          }
+        }
+        return _cachedRole!;
       }
     } catch (e) {
       debugPrint("Error fetching role: $e");
@@ -58,7 +56,7 @@ class FirestoreService {
 
   // Stream owner profile
   Stream<DocumentSnapshot<Map<String, dynamic>>> ownerStream(String uid) {
-    return _db.collection('owners').doc(uid).snapshots();
+    return _db.collection('users').doc(uid).snapshots();
   }
 
   // Stream driver profile
@@ -68,6 +66,17 @@ class FirestoreService {
 
   // Create driver profile (Owner only)
   Future<void> createDriverProfile(String driverUid, Map<String, dynamic> data) async {
+    // 1. Create unified user document with role
+    await _db.collection('users').doc(driverUid).set({
+      'uid': driverUid,
+      'name': data['name'],
+      'email': data['email'],
+      'phone': data['phone'],
+      'role': 'driver',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // 2. Create the detailed driver profile
     await _db.collection('drivers').doc(driverUid).set({
       ...data,
       'createdAt': FieldValue.serverTimestamp(),
@@ -102,7 +111,7 @@ class FirestoreService {
   // Update owner profile
   Future<void> updateOwnerProfile(Map<String, dynamic> data) async {
     if (currentUid.isEmpty) return;
-    await _db.collection('owners').doc(currentUid).update(data);
+    await _db.collection('users').doc(currentUid).update(data);
   }
 
   // Update driver profile
@@ -115,10 +124,10 @@ class FirestoreService {
     await _db.collection('drivers').doc(driverUid).delete();
   }
 
-  // Get driver count for owner
-  Future<Map<String, int>> getFleetStats() async {
+  // Get driver count and earnings for owner
+  Future<Map<String, dynamic>> getFleetStats() async {
     final ownerId = await getEffectiveOwnerId();
-    if (ownerId == null) return {'total': 0, 'active': 0, 'idle': 0};
+    if (ownerId == null) return {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
 
     final snapshot = await _db.collection('drivers')
         .where('ownerId', isEqualTo: ownerId)
@@ -135,10 +144,32 @@ class FirestoreService {
       }
     }
 
+    // Calculate earnings from completed bookings
+    final bookingsSnap = await _db.collection('bookings')
+        .where('ownerId', isEqualTo: ownerId)
+        .where('status', isEqualTo: 'completed')
+        .get();
+
+    double totalEarnings = 0;
+    for (var doc in bookingsSnap.docs) {
+      final data = doc.data();
+      final fareInfo = data['totalFare'] ?? data['price'] ?? 0;
+      double fare = 0.0;
+      if (fareInfo is num) {
+        fare = fareInfo.toDouble();
+      } else if (fareInfo is String) {
+        // remove commas or ₹ signs if any
+        String cleanFare = fareInfo.replaceAll(RegExp(r'[^0-9.]'), '');
+        fare = double.tryParse(cleanFare) ?? 0.0;
+      }
+      totalEarnings += fare;
+    }
+
     return {
       'total': snapshot.docs.length,
       'active': active,
       'idle': idle,
+      'earnings': totalEarnings,
     };
   }
 
@@ -174,18 +205,40 @@ class FirestoreService {
     });
   }
 
-  // Get bookings stream for owner
+  // Get bookings stream for owner/driver
+  // - Owner: sees bookings filtered by ownerId
+  // - Driver: sees bookings accepted by this driver (by driverId)
   Stream<QuerySnapshot<Map<String, dynamic>>> getBookingsStream() {
+    final uid = currentUid;
+    if (uid.isEmpty) return const Stream.empty();
+    // Always filter by driverId so drivers see their own jobs
     return _db.collection('bookings')
-        .where('ownerId', isEqualTo: _cachedOwnerId ?? currentUid)
-        .orderBy('createdAt', descending: true)
+        .where('driverId', isEqualTo: uid)
         .snapshots();
   }
 
-  // Update booking status
+  // Update booking status (uses lowercase)
   Future<void> updateBookingStatus(String bookingId, String status) async {
     await _db.collection('bookings').doc(bookingId).update({
-      'status': status,
+      'status': status.toLowerCase(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Get available pending bookings for drivers (real-time stream)
+  // Uses single-field query (no composite index required).
+  // Client-side filter removes already-assigned bookings.
+  Stream<QuerySnapshot<Map<String, dynamic>>> getAvailableBookingsStream() {
+    return _db.collection('bookings')
+        .where('status', isEqualTo: 'pending')   // lowercase - must match customer app
+        .snapshots();
+  }
+
+  // Driver accepts a job
+  Future<void> takeJob(String bookingId) async {
+    await _db.collection('bookings').doc(bookingId).update({
+      'status': 'accepted',       // lowercase, consistent with customer app
+      'driverId': currentUid,     // link this driver to the booking
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

@@ -6,6 +6,8 @@ import 'dart:async';
 import '../widgets/owner_map.dart';
 import '../services/firestore_service.dart';
 import 'settings_page.dart';
+import 'available_jobs_page.dart';
+import 'tracking_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -21,7 +23,7 @@ class _DashboardPageState extends State<DashboardPage>
   bool _isLoading = true;
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription<Position>? _locationSubscription;
-  Map<String, int> _fleetStats = {'total': 0, 'active': 0, 'idle': 0};
+  Map<String, dynamic> _fleetStats = {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
 
   late AnimationController _animController;
 
@@ -75,7 +77,7 @@ class _DashboardPageState extends State<DashboardPage>
           .doc(user.uid)
           .get();
 
-      Map<String, int> stats = {'total': 0, 'active': 0, 'idle': 0};
+      Map<String, dynamic> stats = {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
       if (role == 'owner') {
         stats = await _firestoreService.getFleetStats();
       }
@@ -229,6 +231,8 @@ class _DashboardPageState extends State<DashboardPage>
                           [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
                       _statCard("${_fleetStats['idle']}", "Idle", Icons.pause_circle_rounded, 
                           [const Color(0xFFff9966), const Color(0xFFff5e62)]),
+                      _statCard("₹${(_fleetStats['earnings'] as num?)?.toStringAsFixed(0) ?? '0'}", "Earnings", Icons.account_balance_wallet_rounded, 
+                          [const Color(0xFF56ab2f), const Color(0xFFa8e063)]),
                     ],
                   ),
                 ),
@@ -246,6 +250,13 @@ class _DashboardPageState extends State<DashboardPage>
                     TextButton(
                       onPressed: () {},
                       child: const Text("View All"),
+                    )
+                  else
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
+                      },
+                      child: const Text("Active Trip"),
                     ),
                 ],
               ),
@@ -302,7 +313,9 @@ class _DashboardPageState extends State<DashboardPage>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {},
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
+          },
           borderRadius: BorderRadius.circular(24),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

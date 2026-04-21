@@ -12,7 +12,7 @@ class OwnerDashboardPage extends StatefulWidget {
 class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
   final GlobalKey<OwnerMapState> _mapKey = GlobalKey<OwnerMapState>();
   final FirestoreService _firestoreService = FirestoreService();
-  Map<String, int> _fleetStats = {'total': 0, 'active': 0, 'idle': 0};
+  Map<String, dynamic> _fleetStats = {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
 
   @override
   void initState() {
@@ -94,6 +94,23 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                       "${_fleetStats['total']} Total",
                       style: const TextStyle(
                         color: Color(0xFF43CEA2),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Earnings badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF56ab2f).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "₹${(_fleetStats['earnings'] as num?)?.toStringAsFixed(0) ?? '0'}",
+                      style: const TextStyle(
+                        color: Color(0xFF56ab2f),
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
