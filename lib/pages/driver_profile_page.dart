@@ -30,7 +30,7 @@ class DriverProfilePage extends StatelessWidget {
             return _buildEmptyState(context);
           }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          final data = snapshot.data!.data() ?? {};
           
           final String name = data['name'] ?? 'Driver Name';
           final String phone = data['phone'] ?? '+91 XXXXXXXXXX';

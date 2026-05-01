@@ -3,14 +3,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 // Pages
-import 'pages/role_selection_page.dart';
 import 'pages/welcome_auth_page.dart';
 import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/owner_dashboard_page.dart';
-import 'pages/owner_main_page.dart';
 import 'pages/splash_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 // Global Theme Notifier for Dark Mode
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);

@@ -81,13 +81,10 @@ class _BottomNavBarState extends State<BottomNavBar> {
         switch (index) {
           case 0:
             page = const DashboardPage();
-            break;
           case 1:
             page = _role == 'driver' ? const BookingsPage() : const DriversPage();
-            break;
           case 2:
             page = const SettingsPage();
-            break;
           default:
             page = const DashboardPage();
         }

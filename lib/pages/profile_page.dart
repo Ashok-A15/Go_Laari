@@ -31,7 +31,7 @@ class ProfilePage extends StatelessWidget {
             return _buildEmptyState(context);
           }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          final data = snapshot.data!.data() ?? {};
           
           // Realistic Fallback Data - "Force Filled" logic
           final String name = data['name'] ?? 'Ramesh Kumar';

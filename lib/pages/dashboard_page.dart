@@ -5,7 +5,6 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import '../widgets/owner_map.dart';
 import '../services/firestore_service.dart';
-import 'settings_page.dart';
 import 'available_jobs_page.dart';
 import 'tracking_page.dart';
 

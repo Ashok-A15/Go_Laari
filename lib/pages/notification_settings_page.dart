@@ -95,7 +95,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> wit
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
         value: value,
         onChanged: onChanged,
-        activeColor: const Color(0xFF43CEA2),
+        activeThumbColor: const Color(0xFF43CEA2),
       ),
     );
   }

@@ -102,7 +102,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                   5,
                   trailing: Switch(
                     value: isDark,
-                    activeColor: const Color(0xFF43CEA2),
+                    activeThumbColor: const Color(0xFF43CEA2),
                     onChanged: (v) {
                       setState(() {
                         themeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
