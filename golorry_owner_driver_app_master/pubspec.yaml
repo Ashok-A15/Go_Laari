@@ -1,0 +1,51 @@
+name: namer_app
+description: "GoLorry / Laari Owner App"
+publish_to: "none"
+
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.5
+
+  # Utility
+  english_words: ^4.0.0
+
+  # 🔥 Firebase (same versions)
+  firebase_core: ^2.30.0
+  firebase_auth: ^4.19.0
+  cloud_firestore: ^4.17.5
+
+  # Maps & Location
+  google_maps_flutter: ^2.7.0
+  geolocator: ^12.0.0
+  geocoding: ^4.0.0
+
+  # Utils
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/app_icon.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/laari.png
+    - assets/app_icon.png

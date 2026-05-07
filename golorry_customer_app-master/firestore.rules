@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function hasRole(role) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    // ── users/{uid} ──────────────────────────────────
+    match /users/{uid} {
+      allow read:  if isSignedIn();          // any logged-in user can read profiles
+      allow write: if isOwner(uid) || hasRole('owner'); // owner can write to create drivers
+    }
+
+    // ── bookings/{bookingId} ─────────────────────────
+    match /bookings/{bookingId} {
+      // Customers see their own; drivers/owners see all bookings (for job list)
+      allow read: if isSignedIn() && (
+                    resource.data.customerId == request.auth.uid ||
+                    resource.data.driverId   == request.auth.uid ||
+                    hasRole('driver') ||
+                    hasRole('owner')
+                  );
+      // Only customers can create bookings for themselves
+      allow create: if hasRole('customer') &&
+                      request.resource.data.customerId == request.auth.uid;
+      // Customers cancel/update their own; drivers accept (set driverId + status)
+      allow update: if isSignedIn() && (
+                      resource.data.customerId == request.auth.uid ||
+                      resource.data.driverId   == request.auth.uid ||
+                      hasRole('driver') ||
+                      hasRole('owner')
+                    );
+      allow delete: if false;
+    }
+
+    // ── drivers/{driverId} ───────────────────────────
+    match /drivers/{driverId} {
+      allow read:   if isSignedIn();
+      allow write:  if hasRole('owner') || isOwner(driverId);
+    }
+
+    // ── vehicles/{vehicleId} ─────────────────────────
+    match /vehicles/{vehicleId} {
+      allow read:   if isSignedIn();
+      allow write:  if hasRole('owner');
+    }
+  }
+}
