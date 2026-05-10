@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dashboard_screen.dart';
-import 'auth_screen.dart';
-import 'onboarding_screen.dart';
-import '../utils/app_colors.dart';
+import 'package:golorry_customer_app/screens/dashboard_screen.dart';
+import 'package:golorry_customer_app/screens/auth_screen.dart';
+import 'package:golorry_customer_app/screens/onboarding_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -15,37 +14,29 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            backgroundColor: AppColors.background,
-            body: Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // Logged in -> go right to Dashboard
         if (snapshot.hasData) {
           return const DashboardScreen();
         }
 
-        // Not logged in -> Checking Onboarding
         return FutureBuilder<SharedPreferences>(
           future: SharedPreferences.getInstance(),
           builder: (context, prefsSnapshot) {
             if (!prefsSnapshot.hasData) {
-              return Scaffold(
-                backgroundColor: AppColors.background,
-                body: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
               );
             }
-            
-            final prefs = prefsSnapshot.data!;
-            final done = prefs.getBool('onboarding_done') ?? false;
-            
-            if (done) {
-              return const AuthScreen(); // We import this
+
+            final onboardingDone =
+                prefsSnapshot.data!.getBool('onboarding_done') ?? false;
+
+            if (onboardingDone) {
+              return const AuthScreen();
             } else {
               return const OnboardingScreen();
             }

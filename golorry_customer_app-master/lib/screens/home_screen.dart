@@ -1,18 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import '../utils/app_colors.dart';
-import '../services/geocoding_service.dart';
-import '../services/booking_service.dart';
-import '../models/booking_model.dart';
+import 'package:http/http.dart' as http;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
+import 'package:golorry_customer_app/services/geocoding_service.dart';
+import 'package:golorry_customer_app/services/booking_service.dart';
+import 'package:golorry_customer_app/models/booking_model.dart';
+import 'package:golorry_customer_app/screens/location_select_screen.dart';
+import 'package:golorry_customer_app/screens/tracking_screen.dart';
+import 'package:golorry_customer_app/screens/more_details_screen.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 
 class HomeScreen extends StatefulWidget {
-  final VoidCallback? onBookLorry;
-
-  const HomeScreen({super.key, this.onBookLorry});
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -22,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
-  static const _apiKey = 'AIzaSyBRspa8sydUkQsiyfNKlQiGMKtRY_agSMg';
+  static const _apiKey = 'AIzaSyByiIPu7kHZroCo8L6bgOVIk2t2riBdM4A';
 
   String _userName = 'Customer';
   String _cityName = 'Locating...';
@@ -31,15 +36,30 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
 
-  // Quick Services
-  final List<_ServiceItem> _services = [
-    _ServiceItem('Multi-stop\nDelivery', Icons.alt_route_rounded, const Color(0xFF6366F1)),
-    _ServiceItem('Scheduled\nBooking', Icons.event_available_rounded, const Color(0xFF10B981)),
-    _ServiceItem('Hire\nHelpers', Icons.people_alt_rounded, const Color(0xFFF59E0B)),
-    _ServiceItem('Bulk\nTransport', Icons.inventory_2_rounded, const Color(0xFF3B82F6)),
-    _ServiceItem('Invoice &\nBilling', Icons.receipt_long_rounded, const Color(0xFFEC4899)),
-    _ServiceItem('Proof of\nDelivery', Icons.verified_rounded, const Color(0xFF06B6D4)),
-  ];
+  // ── MAP & LOCATION STATE ──────────────────────
+  GoogleMapController? _mapController;
+  LatLng? _currentPosition;
+  String? _currentAddress;
+  bool _loadingLocation = true;
+  bool _isLocatingOnMap = false;
+  Set<Polyline> _polylines = {};
+  Set<Marker> _markers = {};
+  LatLng? _trackingPickup;
+  LatLng? _trackingDrop;
+  String? _lastBookingId;
+  List<LatLng> _polylineCoordinates = [];
+
+  // ── BOOKING WORKFLOW STATE ────────────────────
+  bool _isSearching = false;
+  MapType _currentMapType = MapType.normal;
+  String? _pickupAddress;
+  String? _dropAddress;
+  final _pickupController = TextEditingController();
+  final _dropController = TextEditingController();
+  List<Map<String, dynamic>> _predictions = [];
+  String? _activeField;
+  bool _pickupFocused = false;
+  bool _dropFocused = false;
 
   @override
   void initState() {
@@ -55,19 +75,231 @@ class _HomeScreenState extends State<HomeScreen>
     ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
 
     _loadData();
+    _determinePosition();
   }
 
   @override
   void dispose() {
     _animController.dispose();
+    _pickupController.dispose();
+    _dropController.dispose();
     super.dispose();
   }
 
+  Future<void> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    try {
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) setState(() => _loadingLocation = false);
+        return;
+      }
+
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) setState(() => _loadingLocation = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) setState(() => _loadingLocation = false);
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      ).timeout(const Duration(seconds: 5), onTimeout: () {
+        return Position(
+          latitude: 12.9716,
+          longitude: 77.5946,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          heading: 0,
+          speed: 0,
+          speedAccuracy: 0,
+          altitudeAccuracy: 0,
+          headingAccuracy: 0,
+        );
+      });
+      
+      GeocodingService(_apiKey)
+          .getAddressFromCoordinates(position.latitude, position.longitude)
+          .then((address) {
+        if (mounted && address != null) {
+          setState(() {
+            _currentAddress = address;
+            _pickupAddress ??= address;
+            _pickupController.text = address;
+          });
+        }
+      }).catchError((_) {
+        if (mounted) setState(() => _loadingLocation = false);
+      });
+      
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
+          _loadingLocation = false;
+        });
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(_currentPosition!, 15),
+        );
+      }
+    } catch (e) {
+      debugPrint('Location error: $e');
+      if (mounted) setState(() => _loadingLocation = false);
+    }
+  }
+
+  Future<void> _fetchSuggestions(String query, bool isPickup) async {
+    if (query.isEmpty) {
+      setState(() => _predictions.clear());
+      return;
+    }
+    final url = Uri.parse(
+      'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(query)}&components=country:in&key=$_apiKey',
+    );
+    try {
+      final res = await http.get(url);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (data['status'] == 'OK' && mounted) {
+          setState(() {
+            _predictions = List<Map<String, dynamic>>.from(data['predictions']);
+            _activeField = isPickup ? 'pickup' : 'drop';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Places API error: $e');
+    }
+  }
+
+  void _onSuggestionSelected(String description) {
+    if (_activeField == 'pickup') {
+      _pickupController.text = description;
+      _pickupAddress = description;
+      _pickupFocused = false;
+    } else if (_activeField == 'drop') {
+      _dropController.text = description;
+      _dropAddress = description;
+      _dropFocused = false;
+    }
+    setState(() => _predictions.clear());
+    _drawRoute(); // Draw route when suggestion is picked
+  }
+
+  void _proceed() async {
+    final pickup = _pickupController.text.trim();
+    final drop = _dropController.text.trim();
+    if (pickup.isEmpty || drop.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+    );
+
+    try {
+      final directions = await GeocodingService(_apiKey).getDirections(pickup, drop);
+      
+      double distanceKm = 0;
+      if (directions != null) {
+        distanceKm = (directions['distanceValue'] as int) / 1000.0;
+      }
+      double calculatedFare = 500 + (distanceKm * 15);
+
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MoreDetailsScreen(
+              pickupAddress: pickup,
+              dropAddress: drop,
+              vehicleName: 'Lorry',
+              tier: 'Regular',
+              totalFare: calculatedFare,
+              distance: directions?['distance'] ?? 'Calculating...',
+              duration: directions?['duration'] ?? 'Calculating...',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  void _drawRoute() async {
+    final pickup = _pickupController.text.trim();
+    final drop = _dropController.text.trim();
+    if (pickup.isEmpty || drop.isEmpty) return;
+
+    final directions = await GeocodingService(_apiKey).getDirections(pickup, drop);
+    if (directions == null) return;
+
+    final polylinePoints = PolylinePoints();
+    List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
+    
+    List<LatLng> polylineCoordinates = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
+
+    setState(() {
+      _polylines.clear();
+      _polylines.add(Polyline(
+        polylineId: const PolylineId('route'),
+        color: const Color(0xFF3B82F6),
+        width: 6,
+        points: polylineCoordinates,
+        jointType: JointType.round,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+      ));
+
+      _markers.clear();
+      _markers.add(Marker(
+        markerId: const MarkerId('pickup'),
+        position: polylineCoordinates.first,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      ));
+      _markers.add(Marker(
+        markerId: const MarkerId('drop'),
+        position: polylineCoordinates.last,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      ));
+    });
+
+    // Fit bounds
+    LatLngBounds bounds;
+    if (polylineCoordinates.first.latitude > polylineCoordinates.last.latitude) {
+      bounds = LatLngBounds(southwest: polylineCoordinates.last, northeast: polylineCoordinates.first);
+    } else {
+      bounds = LatLngBounds(southwest: polylineCoordinates.first, northeast: polylineCoordinates.last);
+    }
+    
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+  }
+
   Future<void> _loadData() async {
-    await Future.wait([_fetchUserProfile(), _fetchCity()]);
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _animController.forward();
+    try {
+      await Future.wait([
+        _fetchUserProfile().timeout(const Duration(seconds: 4)),
+        _fetchCity().timeout(const Duration(seconds: 4))
+      ]);
+    } catch (e) {
+      debugPrint('Load data warning: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _animController.forward();
+      }
     }
   }
 
@@ -75,42 +307,62 @@ class _HomeScreenState extends State<HomeScreen>
     final user = _auth.currentUser;
     if (user == null) return;
     try {
-      final doc = await _db.collection('users').doc(user.uid).get()
-          .timeout(const Duration(seconds: 5));
+      final doc = await _db.collection('users').doc(user.uid).get();
       if (doc.exists && doc.data()!.containsKey('name')) {
-        _userName = doc.data()!['name'];
-      } else {
-        _userName = user.displayName ??
-            user.email?.split('@')[0] ??
-            'Customer';
+        if (mounted) setState(() => _userName = doc.data()!['name']);
       }
-    } catch (_) {
-      _userName = _auth.currentUser?.email?.split('@')[0] ?? 'Customer';
-    }
+    } catch (_) {}
   }
 
   Future<void> _fetchCity() async {
     try {
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        _cityName = 'India';
-        return;
-      }
-      final pos = await Geolocator.getLastKnownPosition();
-      if (pos != null) {
-        final addr = await GeocodingService(_apiKey)
-            .getAddressFromCoordinates(pos.latitude, pos.longitude)
-            .timeout(const Duration(seconds: 4));
-        if (addr != null) {
-          final parts = addr.split(',');
-          _cityName = parts.isNotEmpty ? parts[0].trim() : 'India';
-        }
-      } else {
-        _cityName = 'India';
-      }
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      ).timeout(const Duration(seconds: 5));
+      final city = await GeocodingService(_apiKey).getCityFromCoordinates(pos.latitude, pos.longitude);
+      if (mounted) setState(() => _cityName = city);
     } catch (_) {
-      _cityName = 'India';
+      if (mounted) setState(() => _cityName = 'India');
+    }
+  }
+
+  void _goToCurrentLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(pos.latitude, pos.longitude),
+            zoom: 16,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("Locate error: $e");
+    }
+  }
+
+  void _confirmMapLocation() async {
+    // Get the center of the map
+    final center = await _mapController?.getVisibleRegion();
+    if (center != null) {
+      final lat = (center.northeast.latitude + center.southwest.latitude) / 2;
+      final lng = (center.northeast.longitude + center.southwest.longitude) / 2;
+      
+      final address = await GeocodingService(_apiKey).getCityFromCoordinates(lat, lng);
+      
+      setState(() {
+        if (_pickupController.text.isEmpty) {
+          _pickupController.text = address;
+        } else {
+          _dropController.text = address;
+        }
+        _isLocatingOnMap = false;
+        _isSearching = true;
+      });
+      _drawRoute(); // Draw the route after selection
     }
   }
 
@@ -123,80 +375,582 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        body: const Center(
-            child: CircularProgressIndicator(color: AppColors.primary)),
-      );
-    }
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: SlideTransition(
-          position: _slideAnim,
-          child: RefreshIndicator(
-            color: AppColors.primary,
-            onRefresh: () async {
-              _animController.reset();
-              await _loadData();
+      body: StreamBuilder<BookingModel?>(
+        stream: BookingService().getActiveBooking().handleError((e) {
+          debugPrint('Booking stream error: $e');
+        }),
+        builder: (context, snapshot) {
+          final activeBooking = snapshot.data;
+
+          if (activeBooking != null) {
+            // If we have an active booking, reset search state to prevent glitches
+            if (_isSearching) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _isSearching = false);
+              });
+            }
+            return _buildActiveTrackingState(activeBooking);
+          }
+
+          return Stack(
+            children: [
+              // ── BACKGROUND MAP ───────────────────────────
+              Positioned.fill(
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _currentPosition ?? const LatLng(12.9716, 77.5946),
+                    zoom: _currentPosition == null ? 10 : 15,
+                  ),
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  onMapCreated: (c) => _mapController = c,
+                ),
+              ),
+
+              // ── CENTER PIN (Only when locating) ───────────
+              if (_isLocatingOnMap)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 35),
+                    child: Icon(Icons.location_on_rounded, color: AppColors.primary, size: 45),
+                  ),
+                ),
+
+              // ── TOP HEADER (Gradient Overlay) ─────────────
+              if (!_isSearching && !_isLocatingOnMap)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildHeader(),
+                ),
+
+
+              // ── SEARCH INTERFACE (BOTTOM) ──────────────────
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+                bottom: (_isSearching && !_isLocatingOnMap) ? 0 : (_isLocatingOnMap ? -800 : 100),
+                left: 0,
+                right: 0,
+                top: (_isSearching && !_isLocatingOnMap) ? 0 : null,
+                child: _buildSearchUI(),
+              ),
+
+              // ── MAP SELECTION UI (BOTTOM) ──────────────────
+              if (_isLocatingOnMap)
+                Positioned(
+                  bottom: 120,
+                  left: 20,
+                  right: 20,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20)],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Move map to adjust pin', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _confirmMapLocation,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Confirm Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _getPolyline(BookingModel booking) async {
+    if (_lastBookingId == booking.id && _polylineCoordinates.isNotEmpty) return;
+    
+    _lastBookingId = booking.id;
+    final geo = GeocodingService(_apiKey);
+    
+    try {
+      final pCoord = await geo.getCoordinates(booking.pickupAddress);
+      final dCoord = await geo.getCoordinates(booking.dropAddress);
+      
+      if (pCoord == null || dCoord == null) {
+        if (mounted) setState(() { _lastBookingId = null; }); // Allow retry
+        return;
+      }
+
+      final directions = await geo.getDirections(booking.pickupAddress, booking.dropAddress);
+      
+      if (mounted) {
+        setState(() {
+          _trackingPickup = pCoord;
+          _trackingDrop = dCoord;
+          
+          if (directions != null) {
+            final polylinePoints = PolylinePoints();
+            List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
+            _polylineCoordinates = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
+          } else {
+            // Fallback to straight line if API fails
+            print('Directions API failed. Showing straight line fallback.');
+            _polylineCoordinates = [pCoord, dCoord];
+          }
+        });
+      }
+    } catch (e) {
+      print('Tracking route error: $e');
+      if (mounted) setState(() { _lastBookingId = null; });
+    }
+  }
+
+  Widget _buildActiveTrackingState(BookingModel booking) {
+    if (_lastBookingId != booking.id) {
+       _getPolyline(booking);
+    }
+    
+    final isDark = AppColors.isDark;
+    
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GoogleMap(
+            mapType: _currentMapType,
+            initialCameraPosition: CameraPosition(
+              target: _trackingPickup ?? const LatLng(12.9716, 77.5946), 
+              zoom: 12,
+            ),
+            myLocationEnabled: true,
+            zoomControlsEnabled: false,
+            markers: {
+              if (_trackingPickup != null)
+                Marker(
+                  markerId: const MarkerId('pickup'),
+                  position: _trackingPickup!,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+                  infoWindow: InfoWindow(title: 'Pickup Point', snippet: booking.pickupAddress),
+                ),
+              if (_trackingDrop != null)
+                Marker(
+                  markerId: const MarkerId('drop'),
+                  position: _trackingDrop!,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                  infoWindow: InfoWindow(title: 'Destination', snippet: booking.dropAddress),
+                ),
             },
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics()),
-              slivers: [
-                // ── GRADIENT HEADER ───────────────────────────
-                SliverToBoxAdapter(child: _buildHeader()),
-
-                // ── BOOK A LORRY CTA ─────────────────────────
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                  sliver: SliverToBoxAdapter(child: _buildBookCTA()),
+            polylines: {
+              if (_polylineCoordinates.isNotEmpty)
+                Polyline(
+                  polylineId: const PolylineId('tracking_route'),
+                  color: AppColors.primary,
+                  width: 5,
+                  points: _polylineCoordinates,
+                  jointType: JointType.round,
+                  startCap: Cap.roundCap,
+                  endCap: Cap.roundCap,
                 ),
+            },
+            onMapCreated: (c) {
+              if (_trackingPickup != null && _trackingDrop != null) {
+                LatLngBounds bounds;
+                if (_trackingPickup!.latitude > _trackingDrop!.latitude) {
+                  bounds = LatLngBounds(southwest: _trackingDrop!, northeast: _trackingPickup!);
+                } else {
+                  bounds = LatLngBounds(southwest: _trackingPickup!, northeast: _trackingDrop!);
+                }
+                c.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+              }
+            },
+          ),
+        ),
 
-                // ── QUICK SERVICES ────────────────────────────
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
-                  sliver: SliverToBoxAdapter(
-                    child: _sectionHeader('Quick Services', null),
+        // Map Type Toggle
+        Positioned(
+          top: 60,
+          right: 20,
+          child: Column(
+            children: [
+              _mapActionBtn(
+                icon: _currentMapType == MapType.normal ? Icons.layers_rounded : Icons.map_rounded,
+                onTap: () {
+                  setState(() {
+                    _currentMapType = _currentMapType == MapType.normal ? MapType.satellite : MapType.normal;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              _mapActionBtn(
+                icon: Icons.my_location_rounded,
+                onTap: () {},
+              ),
+            ],
+          ),
+        ),
+
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 100, 
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                )
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Driver Status Pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF00D4AA), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.person_pin_circle_rounded, size: 12, color: Color(0xFF00D4AA)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Driver Connected',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF00D4AA),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      'ID: ${booking.id.substring(0, 8)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  booking.route,
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  sliver: SliverToBoxAdapter(child: _buildServicesGrid()),
-                ),
-
-                // ── RECENT ACTIVITY ───────────────────────────
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
-                  sliver: SliverToBoxAdapter(
-                    child: _sectionHeader('Recent Activity', 'View all'),
+                const SizedBox(height: 4),
+                Text(
+                  'Driver is heading to destination',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  sliver: SliverToBoxAdapter(child: _buildRecentActivity()),
-                ),
-
-                // ── TIPS & GUIDES ─────────────────────────────
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
-                  sliver: SliverToBoxAdapter(
-                    child: _sectionHeader('Tips & Guides', null),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () => BookingService().completeBooking(booking.id),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00915E),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, size: 20),
+                        const SizedBox(width: 10),
+                        Text('Journey Completed', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15)),
+                      ],
+                    ),
                   ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 100),
-                  sliver: SliverToBoxAdapter(child: _buildTipsCarousel()),
                 ),
               ],
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _mapActionBtn({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: AppColors.primary, size: 22),
       ),
     );
   }
+
+  Widget _buildSearchUI() {
+    if (!_isSearching) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: GestureDetector(
+          onTap: () {
+            debugPrint('Opening Search UI...');
+            setState(() {
+              _isSearching = true;
+              _isLocatingOnMap = false;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                )
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Text(
+                  'Enter destination',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: AppColors.background,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // ── TOP BAR (Back + Title + User)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                    onPressed: () => setState(() => _isSearching = false),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Destination',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_outline_rounded, size: 16),
+                        const SizedBox(width: 4),
+                        Text('Myself', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                        const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── INPUT FIELDS
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    _inputRow(
+                      controller: _pickupController,
+                      hint: 'Pickup Location',
+                      icon: Icons.my_location_rounded,
+                      iconColor: AppColors.primary,
+                      onChanged: (v) => _fetchSuggestions(v, true),
+                      onFocusChange: (f) => setState(() => _pickupFocused = f),
+                    ),
+                    Divider(height: 1, indent: 48, color: AppColors.border),
+                    _inputRow(
+                      controller: _dropController,
+                      hint: 'Enter destination',
+                      icon: Icons.location_on_rounded,
+                      iconColor: AppColors.error,
+                      onChanged: (v) => _fetchSuggestions(v, false),
+                      onFocusChange: (f) => setState(() => _dropFocused = f),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── SUGGESTIONS
+            Expanded(
+              child: _predictions.isNotEmpty
+                  ? ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _predictions.length,
+                      separatorBuilder: (_, __) => Divider(color: AppColors.border, height: 1),
+                      itemBuilder: (context, index) {
+                        final p = _predictions[index];
+                        return ListTile(
+                          leading: const Icon(Icons.history_rounded, size: 20),
+                          title: Text(p['description'], style: GoogleFonts.inter(fontSize: 14)),
+                          onTap: () => _onSuggestionSelected(p['description']),
+                        );
+                      },
+                    )
+                  : Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        _suggestionItem('Mysore Railway Station', 'Pedestrian Overpass, Medar Block...'),
+                        _suggestionItem('1 New Kantharaj Urs Rd', 'CFTRI Layout Sharad...'),
+                      ],
+                    ),
+            ),
+
+            // ── BOTTOM BUTTONS
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 60), // Added bottom padding to move button up
+              child: Column(
+                children: [
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _isSearching = false;
+                      _isLocatingOnMap = true;
+                    }),
+                    icon: const Icon(Icons.map_rounded, size: 18),
+                    label: Text('Locate on map', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(foregroundColor: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: (_pickupController.text.isNotEmpty && _dropController.text.isNotEmpty) ? _proceed : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: Text('Proceed', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _inputRow({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required Color iconColor,
+    required Function(String) onChanged,
+    required Function(bool) onFocusChange,
+  }) {
+    return Focus(
+      onFocusChange: onFocusChange,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Icon(icon, color: iconColor, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _suggestionItem(String title, String subtitle) {
+    return ListTile(
+      leading: const Icon(Icons.history_rounded, size: 20),
+      title: Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+      onTap: () {
+        if (_pickupController.text.isEmpty) {
+          _pickupController.text = title;
+        } else {
+          _dropController.text = title;
+        }
+        setState(() {});
+      },
+    );
+  }
+
 
   // ─────────────────────────────────────────────────
   // HEADER
@@ -303,466 +1057,15 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ─────────────────────────────────────────────────
-  // BOOK A LORRY CTA
-  // ─────────────────────────────────────────────────
-  Widget _buildBookCTA() {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: widget.onBookLorry ?? () {},
-        splashColor: AppColors.primary.withValues(alpha: 0.15),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF00D4AA), Color(0xFF0097A7)],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF00D4AA).withValues(alpha: 0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.local_shipping_rounded,
-                      color: Colors.white, size: 32),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Book a Lorry',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tap to select pickup & drop location',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_forward_rounded,
-                      color: Colors.white, size: 22),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────
-  // QUICK SERVICES GRID
-  // ─────────────────────────────────────────────────
-  Widget _buildServicesGrid() {
-    final isDark = AppColors.isDark;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.9,
-      ),
-      itemCount: _services.length,
-      itemBuilder: (context, i) {
-        final s = _services[i];
-        return Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () {},
-            splashColor: s.color.withValues(alpha: 0.1),
-            child: Ink(
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E2028) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border, width: 0.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(11),
-                    decoration: BoxDecoration(
-                      color: s.color.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(s.icon, color: s.color, size: 24),
-                  ),
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      s.label,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ─────────────────────────────────────────────────
-  // RECENT ACTIVITY
-  // ─────────────────────────────────────────────────
-  Widget _buildRecentActivity() {
-    final isDark = AppColors.isDark;
-    return StreamBuilder<List<BookingModel>>(
-      stream: BookingService().getUserBookings(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _shimmerCard(isDark);
-        }
-
-        final bookings = snapshot.data ?? [];
-        if (bookings.isEmpty) {
-          return _emptyActivity(isDark);
-        }
-
-        // Show last 2 bookings
-        final recent = bookings.take(2).toList();
-        return Column(
-          children: recent.map((b) => _activityCard(b, isDark)).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _activityCard(BookingModel b, bool isDark) {
-    final statusColor = _statusColor(b.status);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2028) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.local_shipping_rounded,
-                  color: statusColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    b.route,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    b.distance.isNotEmpty ? b.distance : b.vehicleName,
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: AppColors.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '₹${b.totalFare.toInt()}',
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    b.status,
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _emptyActivity(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2028) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 0.5),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.local_shipping_outlined,
-              size: 48,
-              color: AppColors.textMuted.withValues(alpha: 0.4)),
-          const SizedBox(height: 12),
-          Text('No trips yet',
-              style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary)),
-          const SizedBox(height: 4),
-          Text('Your bookings will appear here',
-              style: GoogleFonts.inter(
-                  fontSize: 13, color: AppColors.textMuted)),
-        ],
-      ),
-    );
-  }
-
-  Widget _shimmerCard(bool isDark) {
-    final c = isDark ? const Color(0xFF2A2E39) : const Color(0xFFF0F0F0);
-    return Container(
-      height: 76,
-      decoration: BoxDecoration(
-          color: c, borderRadius: BorderRadius.circular(16)),
-    );
-  }
-
-  // ─────────────────────────────────────────────────
-  // TIPS & GUIDES
-  // ─────────────────────────────────────────────────
-  Widget _buildTipsCarousel() {
-    final isDark = AppColors.isDark;
-    final tips = [
-      _TipItem('How to post a load?',
-          'Learn to book in just 3 taps', Icons.play_circle_fill_rounded, const Color(0xFF6366F1)),
-      _TipItem('How pricing works?',
-          'Understand fare calculations', Icons.attach_money_rounded, const Color(0xFF10B981)),
-      _TipItem('Best truck for your goods',
-          'Pick the right vehicle type', Icons.local_shipping_rounded, const Color(0xFF3B82F6)),
-    ];
-    return SizedBox(
-      height: 120,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        physics: const BouncingScrollPhysics(),
-        itemCount: tips.length,
-        itemBuilder: (context, i) {
-          final t = tips[i];
-          return Container(
-            width: 260,
-            margin: const EdgeInsets.only(right: 14),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E2028) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border, width: 0.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {},
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: t.color.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(t.icon, color: t.color, size: 28),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(t.title,
-                                style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary),
-                                maxLines: 2),
-                            const SizedBox(height: 4),
-                            Text(t.subtitle,
-                                style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary),
-                                maxLines: 1),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────
-  // HELPERS
-  // ─────────────────────────────────────────────────
-  Widget _sectionHeader(String title, String? actionLabel) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        if (actionLabel != null)
-          Text(
-            actionLabel,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary,
-            ),
-          ),
-      ],
-    );
-  }
-
   String _firstName(String name) {
     final parts = name.trim().split(' ');
     return parts.isNotEmpty && parts[0].isNotEmpty ? parts[0] : 'there';
-  }
-
-  Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'in transit':
-        return const Color(0xFF3B82F6);
-      case 'completed':
-        return const Color(0xFF10B981);
-      case 'cancelled':
-        return const Color(0xFFEF4444);
-      case 'accepted':
-        return const Color(0xFF10B981);
-      default: // pending, etc.
-        return const Color(0xFFF59E0B);
-    }
   }
 }
 
 // ─────────────────────────────────────────────────
 // DATA MODELS
 // ─────────────────────────────────────────────────
-class _ServiceItem {
-  final String label;
-  final IconData icon;
-  final Color color;
-  const _ServiceItem(this.label, this.icon, this.color);
-}
-
-class _TipItem {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  const _TipItem(this.title, this.subtitle, this.icon, this.color);
-}
 
 // ─────────────────────────────────────────────────
 // CUSTOM CLIPPER FOR CURVED HEADER BOTTOM

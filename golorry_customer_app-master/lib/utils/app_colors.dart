@@ -62,12 +62,21 @@ class AppColors {
   }
 
   // ── Constant Brand Colors ────────────────────────────────
-  static const primary       = Color(0xFF00D4AA);
-  static const primaryDark   = Color(0xFF00B894);
-  static const primaryLight  = Color(0xFF33DEBB);
+  static const primary       = Color(0xFF00D4AA); // The Teal/Mint
+  static const primaryDark   = Color(0xFF1D4ED8); // The Deep Blue
+  static const primaryLight  = Color(0xFF33DEBB); // Light Teal
 
-  static const secondary     = Color(0xFF2563EB);
-  static const secondaryDark = Color(0xFF1D4ED8);
+  static const secondary     = Color(0xFF2563EB); // Vibrant Blue
+  static const secondaryDark = Color(0xFF1D4ED8); // Deep Navy
+
+  static const gradientStart = Color(0xFF33DEBB);
+  static const gradientEnd   = Color(0xFF1D4ED8);
+
+  static const primaryGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [gradientStart, gradientEnd],
+  );
 
   static const success = Color(0xFF10B981);
   static const warning = Color(0xFFF59E0B);

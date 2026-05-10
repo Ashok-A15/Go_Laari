@@ -1,0 +1,28 @@
+version: 0.1.0
+
+# CodeMagic CI/CD configuration for a Flutter app
+
+workflows:
+  build:
+    name: Build and Distribute to Firebase
+    scripts:
+      - name: Install dependencies
+        script: 
+          - flutter pub get
+          - flutter pub global activate firebase-tools
+
+      - name: Build APK
+        script: 
+          - flutter build apk --release
+
+      - name: Upload to Firebase
+        script: 
+          - firebase appdistribution:distribute build/app/outputs/apk/release/app-release.apk --app <your_firebase_app_id> --groups <testers_group> --release-notes "Automated build from CodeMagic" 
+
+      - name: Build iOS
+        script:
+          - flutter build ios --release
+
+      - name: Upload iOS to Firebase
+        script:
+          - firebase appdistribution:distribute build/ios/iphoneos/Runner.app --app <your_firebase_app_id> --groups <testers_group> --release-notes "Automated build from CodeMagic" 

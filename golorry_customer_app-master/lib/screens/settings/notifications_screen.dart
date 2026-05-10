@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../utils/app_colors.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -29,13 +29,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Notifications',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        title: Text(
+          'Notifications',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
         backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              size: 20, color: AppColors.textPrimary),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -149,30 +156,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               height: 52,
               child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Row(children: [
-                      const Icon(Icons.check_circle_rounded,
-                          color: Color(0xFF00D4AA), size: 18),
-                      const SizedBox(width: 10),
-                      Text('Notification preferences saved!',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600))
-                    ]),
-                    backgroundColor: AppColors.surface,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF00D4AA),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Notification preferences saved!',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: AppColors.surface,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00D4AA),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 0,
                 ),
-                child: Text('Save Preferences',
-                    style: GoogleFonts.inter(
-                        fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Text(
+                  'Save Preferences',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 40),
@@ -192,20 +216,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, size: 16, color: iconColor),
-          ),
-          const SizedBox(width: 10),
-          Text(title,
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 16, color: iconColor),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              title,
               style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary)),
-        ]),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
@@ -213,9 +244,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3))
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
             ],
           ),
           child: Column(children: children),
@@ -236,21 +268,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
                   style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 2),
-              Text(subtitle,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
                   style: GoogleFonts.inter(
-                      fontSize: 12, color: AppColors.textMuted)),
-            ]),
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
           ),
           Switch(
             value: value,
-            activeColor: const Color(0xFF00D4AA),
+            activeThumbColor: const Color(0xFF00D4AA),
             onChanged: onChanged,
           ),
         ],
@@ -259,8 +301,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _divider(bool isDark) => Divider(
-      height: 1,
-      indent: 16,
-      endIndent: 16,
-      color: AppColors.border.withValues(alpha: 0.5));
+    height: 1,
+    indent: 16,
+    endIndent: 16,
+    color: AppColors.border.withValues(alpha: 0.5),
+  );
 }

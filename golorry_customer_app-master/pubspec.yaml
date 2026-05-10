@@ -1,35 +1,40 @@
 name: golorry_customer_app
-description: "GoLorry Customer App"
-publish_to: 'none'
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ^3.10.3
 
 dependencies:
   flutter:
     sdk: flutter
-
   cupertino_icons: ^1.0.8
 
-  # 🔥 Firebase (same versions as driver app)
-  firebase_core: ^2.30.0
-  firebase_auth: ^4.19.0
-  cloud_firestore: ^4.17.5
+  # Firebase
+  firebase_core: ^4.3.0
+  firebase_auth: ^6.1.3
 
-  # Maps & Location
-  google_maps_flutter: ^2.7.0
-  geolocator: ^12.0.0
-
-  # Network
-  http: ^1.2.1
+  # Google Maps
+  google_maps_flutter: ^2.6.1
+  http: ^1.6.0
 
   # Fonts
   google_fonts: ^6.2.1
 
-  # Local storage
+  # Persistence
   shared_preferences: ^2.3.2
+  cloud_firestore: ^6.2.0
+  geolocator: ^14.0.2
+  lottie: ^3.1.2
+  shimmer: ^3.0.0
+  flutter_polyline_points: ^2.1.0
+  intl: ^0.20.2
+  google_generative_ai: ^0.4.0
+  speech_to_text: ^7.3.0
+  permission_handler: ^12.0.1
+  image_picker: ^1.2.2
 
 dev_dependencies:
   flutter_test:
@@ -38,3 +43,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/

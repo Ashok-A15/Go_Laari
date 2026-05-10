@@ -24,5 +24,3 @@ plugins {
 }
 
 include(":app")
-
-rootProject.name = "golorry_customer_app"

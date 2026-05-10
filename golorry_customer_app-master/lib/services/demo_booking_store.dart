@@ -1,4 +1,4 @@
-import '../models/booking.dart';
+import 'package:golorry_customer_app/models/booking.dart';
 
 class DemoBookingStore {
   static final List<Booking> bookings = [];
