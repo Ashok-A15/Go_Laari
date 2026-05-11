@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../pages/dashboard_page.dart';
 import '../pages/drivers_page.dart';
 import '../pages/settings_page.dart';
@@ -45,7 +45,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
         borderRadius: BorderRadius.circular(35),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -102,7 +102,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
         duration: const Duration(milliseconds: 300),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF43CEA2).withValues(alpha: 0.15) : Colors.transparent,
+          color: isSelected ? const Color(0xFF43CEA2).withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(

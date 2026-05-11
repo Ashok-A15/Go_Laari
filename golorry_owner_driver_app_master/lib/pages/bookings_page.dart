@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/firestore_service.dart';
@@ -81,7 +81,7 @@ class _BookingsPageState extends State<BookingsPage>
                       child: TextField(
                         controller: priceCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Price (₹)", prefixIcon: Icon(Icons.currency_rupee_rounded)),
+                        decoration: const InputDecoration(labelText: "Price (?)", prefixIcon: Icon(Icons.currency_rupee_rounded)),
                       ),
                     ),
                   ],
@@ -93,7 +93,7 @@ class _BookingsPageState extends State<BookingsPage>
                     return ChoiceChip(
                       label: Text(s),
                       selected: selectedStatus == s,
-                      selectedColor: _getStatusColor(s).withValues(alpha: 0.2),
+                      selectedColor: _getStatusColor(s).withOpacity(0.2),
                       onSelected: (_) => setModalState(() => selectedStatus = s),
                     );
                   }).toList(),
@@ -212,7 +212,7 @@ class _BookingsPageState extends State<BookingsPage>
                   child: FilterChip(
                     label: Text(s == "all" ? "All" : _capitalize(s)),
                     selected: isSelected,
-                    selectedColor: const Color(0xFF43CEA2).withValues(alpha: 0.15),
+                    selectedColor: const Color(0xFF43CEA2).withOpacity(0.15),
                     checkmarkColor: const Color(0xFF185A9D),
                     onSelected: (_) => setState(() => _filterStatus = s),
                   ),
@@ -285,7 +285,7 @@ class _BookingsPageState extends State<BookingsPage>
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF185A9D).withValues(alpha: 0.08),
+              color: const Color(0xFF185A9D).withOpacity(0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.receipt_long_rounded, size: 60, color: Colors.grey.shade400),
@@ -322,7 +322,7 @@ class _BookingsPageState extends State<BookingsPage>
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -337,7 +337,7 @@ class _BookingsPageState extends State<BookingsPage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
+                    color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(icon, color: statusColor, size: 28),
@@ -365,7 +365,7 @@ class _BookingsPageState extends State<BookingsPage>
                   ),
                 ),
                 Text(
-                  "₹$price",
+                  "?$price",
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -393,7 +393,7 @@ class _BookingsPageState extends State<BookingsPage>
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF185A9D).withValues(alpha: 0.05),
+                      color: const Color(0xFF185A9D).withOpacity(0.05),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Row(

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -126,7 +126,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          Colors.blueAccent.withValues(alpha: 0.35),
+                          Colors.blueAccent.withOpacity(0.35),
                           Colors.transparent,
                         ],
                       ),
@@ -225,7 +225,7 @@ class GLogoPainter extends CustomPainter {
     gPath.lineTo(center.dx + radius * 0.2, center.dy);
 
     if (logoProgress > 0) {
-      canvas.drawPath(gPath, gPaint..color = gPaint.color.withValues(alpha: logoProgress));
+      canvas.drawPath(gPath, gPaint..color = gPaint.color.withOpacity(logoProgress));
     }
 
     // 2. Animate Lorry along the top curve
@@ -255,14 +255,14 @@ class GLogoPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
           ..shader = LinearGradient(
-            colors: [Colors.white.withValues(alpha: 0.0), const Color(0xFF43CEA2).withValues(alpha: 0.4)],
+            colors: [Colors.white.withOpacity(0.0), const Color(0xFF43CEA2).withOpacity(0.4)],
           ).createShader(const Rect.fromLTWH(-60, -5, 60, 10));
         
         canvas.drawLine(const Offset(-40, 0), const Offset(0, 0), trailPaint);
       }
 
       // Draw Lorry Icon/Shape (Simplified but matching reference)
-      final Paint lorryPaint = Paint()..color = Colors.white.withValues(alpha: logoProgress);
+      final Paint lorryPaint = Paint()..color = Colors.white.withOpacity(logoProgress);
       final lorryRect = Rect.fromLTWH(-15, -12, 30, 18);
       
       // Lorry Body
@@ -291,9 +291,9 @@ class GLogoPainter extends CustomPainter {
   }
 
   void _drawWheel(Canvas canvas, Offset offset, double rotation, double opacity) {
-    final wheelPaint = Paint()..color = Colors.black.withValues(alpha: opacity * 0.7);
+    final wheelPaint = Paint()..color = Colors.black.withOpacity(opacity * 0.7);
     final rimPaint = Paint()
-      ..color = Colors.white.withValues(alpha: opacity)
+      ..color = Colors.white.withOpacity(opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 

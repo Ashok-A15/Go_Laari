@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firestore_service.dart';
 
@@ -156,7 +156,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage>
                           Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFF43CEA2).withValues(alpha: 0.4), width: 3),
+                              border: Border.all(color: const Color(0xFF43CEA2).withOpacity(0.4), width: 3),
                             ),
                             child: CircleAvatar(
                               radius: 50,
@@ -194,7 +194,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage>
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
+                            color: Colors.black.withOpacity(0.04),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -252,7 +252,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage>
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
       ),
       child: Row(
         children: [
@@ -271,7 +271,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.1),
+              color: Colors.grey.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text("Read Only", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),

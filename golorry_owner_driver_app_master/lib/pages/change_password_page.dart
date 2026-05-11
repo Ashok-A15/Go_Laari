@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 
 class ChangePasswordPage extends StatefulWidget {
@@ -107,7 +107,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF185A9D).withValues(alpha: 0.08),
+                    color: const Color(0xFF185A9D).withOpacity(0.08),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -134,7 +134,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: Colors.black.withOpacity(0.04),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),

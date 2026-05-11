@@ -180,12 +180,11 @@ class _DashboardPageState extends State<DashboardPage>
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   color: isDark 
-                    ? const Color(0xFF1E272E).withValues(alpha: 0.9) 
-                    : Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(20),
+                    ? const Color(0xFF1E272E).withOpacity(0.9) 
+                    : Colors.white.withOpacity(0.9),                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
+                      color: Colors.black.withOpacity(0.1),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),
@@ -301,7 +300,7 @@ class _DashboardPageState extends State<DashboardPage>
                     borderRadius: BorderRadius.circular(15),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF43CEA2).withValues(alpha: 0.3),
+                        color: const Color(0xFF43CEA2).withOpacity(0.3),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -335,11 +334,11 @@ class _DashboardPageState extends State<DashboardPage>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor.withValues(alpha: 0.9),
+                    color: Theme.of(context).cardColor.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
+                        color: Colors.black.withOpacity(0.1),
                         blurRadius: 10,
                         offset: const Offset(0, -5),
                       ),
@@ -390,7 +389,7 @@ class _DashboardPageState extends State<DashboardPage>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: gradient[1].withValues(alpha: 0.3),
+            color: gradient[1].withOpacity(0.3),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -415,7 +414,7 @@ class _DashboardPageState extends State<DashboardPage>
               Text(
                 title,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: Colors.white.withOpacity(0.9),
                   fontSize: 13,
                 ),
               ),

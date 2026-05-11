@@ -53,7 +53,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
                     blurRadius: 15,
                     offset: const Offset(0, 5),
                   ),
@@ -64,7 +64,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF43CEA2).withValues(alpha: 0.1),
+                      color: const Color(0xFF43CEA2).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.local_shipping_rounded, color: Color(0xFF185A9D)),
@@ -90,7 +90,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF43CEA2).withValues(alpha: 0.1),
+                      color: const Color(0xFF43CEA2).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -107,7 +107,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF56ab2f).withValues(alpha: 0.1),
+                      color: const Color(0xFF56ab2f).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -164,7 +164,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
+                color: Colors.grey.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -202,16 +202,16 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF43CEA2).withValues(alpha: 0.1) : theme.cardColor,
+              color: isSelected ? const Color(0xFF43CEA2).withOpacity(0.1) : theme.cardColor,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected ? const Color(0xFF43CEA2) : Colors.grey.withValues(alpha: 0.1),
+                color: isSelected ? const Color(0xFF43CEA2) : Colors.grey.withOpacity(0.1),
                 width: 2,
               ),
               boxShadow: [
                 if (isSelected)
                   BoxShadow(
-                    color: const Color(0xFF43CEA2).withValues(alpha: 0.2),
+                    color: const Color(0xFF43CEA2).withOpacity(0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -246,7 +246,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

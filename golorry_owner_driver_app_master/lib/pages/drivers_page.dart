@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/firestore_service.dart';
@@ -148,14 +148,14 @@ class _DriversPageState extends State<DriversPage> {
                       ChoiceChip(
                         label: const Text("Active"),
                         selected: status == 'active',
-                        selectedColor: Colors.green.withValues(alpha: 0.2),
+                        selectedColor: Colors.green.withOpacity(0.2),
                         onSelected: (_) => setModalState(() => status = 'active'),
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
                         label: const Text("Inactive"),
                         selected: status != 'active',
-                        selectedColor: Colors.red.withValues(alpha: 0.2),
+                        selectedColor: Colors.red.withOpacity(0.2),
                         onSelected: (_) => setModalState(() => status = 'inactive'),
                       ),
                     ],
@@ -253,7 +253,7 @@ class _DriversPageState extends State<DriversPage> {
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
                 ],
               ),
               child: TextField(
@@ -356,7 +356,7 @@ class _DriversPageState extends State<DriversPage> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF43CEA2).withValues(alpha: 0.1),
+              color: const Color(0xFF43CEA2).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.people_outline_rounded, size: 60, color: Colors.grey.shade400),
@@ -419,7 +419,7 @@ class _DriverCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 15,
             offset: const Offset(0, 8),
           )
@@ -433,7 +433,7 @@ class _DriverCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (isActive ? const Color(0xFF43CEA2) : Colors.grey).withValues(alpha: 0.1),
+                  color: (isActive ? const Color(0xFF43CEA2) : Colors.grey).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
@@ -460,7 +460,7 @@ class _DriverCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: (isActive ? Colors.green : Colors.red).withValues(alpha: 0.1),
+                            color: (isActive ? Colors.green : Colors.red).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -519,7 +519,7 @@ class _DriverCard extends StatelessWidget {
   Widget _buildInfoRow(IconData icon, String label, String value, Color color) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: color.withValues(alpha: 0.8)),
+        Icon(icon, size: 18, color: color.withOpacity(0.8)),
         const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,

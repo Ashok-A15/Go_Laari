@@ -126,7 +126,7 @@ class _AvailableJobsPageState extends State<AvailableJobsPage> {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.43),
+                      color: Colors.black.withOpacity(0.43),
                       blurRadius: 15,
                       offset: const Offset(0, 8),
                     ),

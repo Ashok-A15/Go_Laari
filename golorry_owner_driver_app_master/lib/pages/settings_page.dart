@@ -149,14 +149,14 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.08),
+                        color: Colors.red.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.1),
+                            color: Colors.red.withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.logout_rounded, color: Colors.redAccent),
@@ -267,13 +267,13 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: Colors.grey.withValues(alpha: 0.05)),
+            side: BorderSide(color: Colors.grey.withOpacity(0.05)),
           ),
           child: ListTile(
             leading: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF185A9D).withValues(alpha: 0.05),
+                color: const Color(0xFF185A9D).withOpacity(0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: const Color(0xFF185A9D), size: 22),

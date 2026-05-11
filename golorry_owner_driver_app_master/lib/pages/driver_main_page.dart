@@ -36,7 +36,7 @@ class _DriverMainPageState extends State<DriverMainPage> {
           borderRadius: BorderRadius.circular(35),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -72,7 +72,7 @@ class _DriverMainPageState extends State<DriverMainPage> {
         duration: const Duration(milliseconds: 300),
         padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF43CEA2).withValues(alpha: 0.15) : Colors.transparent,
+          color: isSelected ? const Color(0xFF43CEA2).withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'driver_login_page.dart';
 
@@ -96,8 +96,8 @@ class RoleSelectionPage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
-              color: Colors.white.withValues(alpha: 0.1),
+              border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
+              color: Colors.white.withOpacity(0.1),
             ),
             child: Row(
               children: [

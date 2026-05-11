@@ -151,7 +151,7 @@ class _TrackingPageState extends State<TrackingPage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10),
+                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10),
                 ],
               ),
               child: Row(
@@ -191,7 +191,7 @@ class _TrackingPageState extends State<TrackingPage> {
                 color: Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -5)),
+                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -5)),
                 ],
               ),
               child: Column(
@@ -210,7 +210,7 @@ class _TrackingPageState extends State<TrackingPage> {
                     children: [
                       CircleAvatar(
                         radius: 25,
-                        backgroundColor: const Color(0xFF43CEA2).withValues(alpha: 0.1),
+                        backgroundColor: const Color(0xFF43CEA2).withOpacity(0.1),
                         child: const Icon(Icons.person_rounded, color: Color(0xFF185A9D)),
                       ),
                       const SizedBox(width: 15),
@@ -225,7 +225,7 @@ class _TrackingPageState extends State<TrackingPage> {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
                         child: Text(_status, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
@@ -251,7 +251,7 @@ class _TrackingPageState extends State<TrackingPage> {
                       ),
                       const SizedBox(width: 16),
                       Container(
-                        decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
                         child: IconButton(
                           onPressed: () {},
                           icon: const Icon(Icons.close_rounded, color: Colors.red),
