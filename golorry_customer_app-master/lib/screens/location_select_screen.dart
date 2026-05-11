@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
-import '../utils/app_colors.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
 
 class LocationSelectScreen extends StatefulWidget {
   const LocationSelectScreen({super.key});
@@ -19,7 +19,7 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
 
   final String _placesApiKey = 'AIzaSyBHKu2YcOIN7RN-_mbU-UfzzXexvXh2apA';
   List<Map<String, dynamic>> _predictions = [];
-  String? _activeField; 
+  String? _activeField;
 
   Future<void> _fetchSuggestions(String query, bool isPickup) async {
     if (query.isEmpty) {
@@ -27,7 +27,8 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
       return;
     }
     final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(query)}&components=country:in&key=$_placesApiKey');
+      'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(query)}&components=country:in&key=$_placesApiKey',
+    );
     try {
       final res = await http.get(url);
       if (res.statusCode == 200) {
@@ -69,16 +70,15 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
           ),
           backgroundColor: AppColors.card,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
     }
 
-    Navigator.pop(context, {
-      'pickup': pickup,
-      'drop': drop,
-    });
+    Navigator.pop(context, {'pickup': pickup, 'drop': drop});
   }
 
   @override
@@ -142,7 +142,9 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                         },
                         child: TextField(
                           controller: _pickupController,
-                          style: GoogleFonts.inter(color: AppColors.textPrimary),
+                          style: GoogleFonts.inter(
+                            color: AppColors.textPrimary,
+                          ),
                           onChanged: (val) => _fetchSuggestions(val, true),
                           decoration: InputDecoration(
                             fillColor: Colors.transparent,
@@ -193,7 +195,9 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                         },
                         child: TextField(
                           controller: _dropController,
-                          style: GoogleFonts.inter(color: AppColors.textPrimary),
+                          style: GoogleFonts.inter(
+                            color: AppColors.textPrimary,
+                          ),
                           onChanged: (val) => _fetchSuggestions(val, false),
                           decoration: InputDecoration(
                             fillColor: Colors.transparent,
@@ -226,20 +230,33 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                 child: _predictions.isNotEmpty
                     ? ListView.separated(
                         itemCount: _predictions.length,
-                        separatorBuilder: (_, __) => Divider(color: AppColors.border, height: 1),
+                        separatorBuilder: (_, __) =>
+                            Divider(color: AppColors.border, height: 1),
                         itemBuilder: (context, index) {
                           final pred = _predictions[index];
                           return ListTile(
-                            leading: Icon(Icons.place_outlined, color: AppColors.textSecondary),
+                            leading: Icon(
+                              Icons.place_outlined,
+                              color: AppColors.textSecondary,
+                            ),
                             title: Text(
-                              pred['structured_formatting']['main_text'] ?? pred['description'],
-                              style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                              pred['structured_formatting']['main_text'] ??
+                                  pred['description'],
+                              style: GoogleFonts.inter(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             subtitle: Text(
-                              pred['structured_formatting']['secondary_text'] ?? '',
-                              style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
+                              pred['structured_formatting']['secondary_text'] ??
+                                  '',
+                              style: GoogleFonts.inter(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
+                              ),
                             ),
-                            onTap: () => _onSuggestionSelected(pred['description']),
+                            onTap: () =>
+                                _onSuggestionSelected(pred['description']),
                           );
                         },
                       )
@@ -269,7 +286,8 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: _pickupController.text.isNotEmpty &&
+                  onPressed:
+                      _pickupController.text.isNotEmpty &&
                           _dropController.text.isNotEmpty
                       ? _proceed
                       : null,
@@ -316,8 +334,7 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
         ),
         child: Row(
           children: [
-            Icon(Icons.history_rounded,
-                size: 18, color: AppColors.textMuted),
+            Icon(Icons.history_rounded, size: 18, color: AppColors.textMuted),
             const SizedBox(width: 12),
             Text(
               label,
@@ -327,8 +344,11 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
               ),
             ),
             const Spacer(),
-            Icon(Icons.north_west_rounded,
-                size: 14, color: AppColors.textMuted),
+            Icon(
+              Icons.north_west_rounded,
+              size: 14,
+              color: AppColors.textMuted,
+            ),
           ],
         ),
       ),

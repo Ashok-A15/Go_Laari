@@ -1,10 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../utils/app_colors.dart';
-import 'home_screen.dart';
-import 'live_screen.dart';
-import 'activity_screen.dart';
-import 'profile_screen.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
+import 'package:golorry_customer_app/screens/home_screen.dart';
+import 'package:golorry_customer_app/screens/live_screen.dart';
+import 'package:golorry_customer_app/screens/chatbot_screen.dart';
+import 'package:golorry_customer_app/screens/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,7 +16,6 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
-
   final _pageController = PageController();
 
   @override
@@ -26,60 +26,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Re-build the entire scaffold whenever the theme toggles
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppColors.themeNotifier,
       builder: (context, _, __) {
         final isDark = AppColors.isDark;
+        final navBgColor = isDark ? const Color(0xFF132548).withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.9);
 
         return Scaffold(
           backgroundColor: AppColors.background,
           body: Stack(
             children: [
-              // Lazy PageView — tabs only init when first visited
               PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (i) => setState(() => _currentIndex = i),
-                children: [
-                  HomeScreen(
-                    onBookLorry: () {
-                      setState(() => _currentIndex = 1);
-                      _pageController.jumpToPage(1);
-                    },
-                  ),
+                children: const [
+                  HomeScreen(),
                   LiveScreen(),
-                  ActivityScreen(),
+                  ChatbotScreen(),
                   ProfileScreen(),
                 ],
               ),
 
-              // Floating Bottom Nav Bar
+              // ── PREMIUM FLOATING DOCK ────────────────────
               Positioned(
                 left: 20,
                 right: 20,
                 bottom: 24,
-                child: Container(
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF232731) : Colors.white,
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: navBgColor,
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _navItem(0, Icons.grid_view_rounded, 'Home', isDark),
-                      _navItem(1, Icons.gps_fixed_rounded, 'Live', isDark),
-                      _navItem(2, Icons.receipt_long_rounded, 'Bookings', isDark),
-                      _navItem(3, Icons.settings_rounded, 'Settings', isDark),
-                    ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _navItem(0, Icons.grid_view_rounded, 'Home', isDark),
+                          _navItem(1, Icons.local_shipping_rounded, 'Orders', isDark),
+                          _navItem(2, Icons.auto_awesome_rounded, 'AI Assistant', isDark),
+                          _navItem(3, Icons.settings_suggest_rounded, 'Settings', isDark),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -92,6 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _navItem(int index, IconData icon, String label, bool isDark) {
     final isActive = _currentIndex == index;
+    final color = isActive ? const Color(0xFF2DD4BF) : AppColors.textMuted;
 
     return GestureDetector(
       onTap: () {
@@ -99,39 +101,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _pageController.jumpToPage(index);
       },
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(
-          horizontal: isActive ? 16 : 12,
-          vertical: 10,
-        ),
-        decoration: BoxDecoration(
-          color: isActive 
-              ? (isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.15))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? AppColors.primary : AppColors.textMuted,
-              size: 24,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 4),
+          AnimatedOpacity(
+            opacity: isActive ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: Text(
+              label,
+              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: color),
             ),
-            if (isActive) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

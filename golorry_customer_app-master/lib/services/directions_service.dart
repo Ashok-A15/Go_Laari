@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 
 class DirectionsResult {
   final List<LatLng> polylinePoints;
@@ -15,9 +16,7 @@ class DirectionsResult {
 }
 
 class DirectionsService {
-  static const String _baseUrl =
-      'https://maps.googleapis.com/maps/api/directions/json';
-
+  static const String _baseUrl = 'https://maps.googleapis.com/maps/api/directions/json';
   final String apiKey;
 
   DirectionsService(this.apiKey);
@@ -26,60 +25,45 @@ class DirectionsService {
     required LatLng origin,
     required LatLng destination,
   }) async {
-    final url =
-        '$_baseUrl?origin=${origin.latitude},${origin.longitude}'
+    final url = '$_baseUrl?origin=${origin.latitude},${origin.longitude}'
         '&destination=${destination.latitude},${destination.longitude}'
-        '&mode=driving'
-        '&key=$apiKey';
+        '&mode=driving&key=$apiKey';
 
-    final response = await http.get(Uri.parse(url));
+    try {
+      final response = await http.get(Uri.parse(url));
 
-    if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        print('Directions API Error: HTTP ${response.statusCode}');
+        return null;
+      }
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
 
-    if (data['status'] != 'OK') return null;
+      if (data['status'] != 'OK') {
+        print('Directions API Error: ${data['status']} - ${data['error_message'] ?? 'No error message'}');
+        return null;
+      }
 
-    final route = data['routes'][0];
-    final leg = route['legs'][0];
+      final route = data['routes'][0];
+      final leg = route['legs'][0];
 
-    final distanceKm = leg['distance']['value'] / 1000.0;
-    final durationMin = leg['duration']['value'] / 60.0;
+      final distanceKm = leg['distance']['value'] / 1000.0;
+      final durationMin = leg['duration']['value'] / 60.0;
 
-    final encodedPolyline = route['overview_polyline']['points'];
-    final polylinePoints = _decodePolyline(encodedPolyline);
+      // Use the official polyline_points package for decoding
+      PolylinePoints polylinePoints = PolylinePoints();
+      List<PointLatLng> result = polylinePoints.decodePolyline(route['overview_polyline']['points']);
+      
+      List<LatLng> points = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
 
-    return DirectionsResult(
-      polylinePoints: polylinePoints,
-      distanceKm: distanceKm,
-      durationMin: durationMin,
-    );
-  }
-
-  List<LatLng> _decodePolyline(String encoded) {
-    List<LatLng> points = [];
-    int index = 0, lat = 0, lng = 0;
-
-    while (index < encoded.length) {
-      int b, shift = 0, result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      lat += ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      lng += ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-
-      points.add(LatLng(lat / 1E5, lng / 1E5));
+      return DirectionsResult(
+        polylinePoints: points,
+        distanceKm: distanceKm,
+        durationMin: durationMin,
+      );
+    } catch (e) {
+      print('Directions Service Exception: $e');
+      return null;
     }
-    return points;
   }
 }

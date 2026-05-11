@@ -42,29 +42,19 @@ class AuthService {
     debugPrint('✅ [AuthService] Auth account created. UID=$uid');
 
     // 2) Save user profile to Firestore
-    // If this fails, rollback by deleting the Auth account so the user
-    // can retry signup with the same email.
     debugPrint('🔵 [AuthService] Writing Firestore users/$uid …');
-    try {
-      await _db.collection('users').doc(uid).set({
-        'uid': uid,
-        'name': name.trim(),
-        'email': email.trim(),
-        'phone': phone.trim(),
-        'role': 'customer',
-        'totalTrips': 0,
-        'totalSpend': 0.0,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      debugPrint('✅ [AuthService] Firestore user doc written!');
-    } catch (e) {
-      // Rollback: delete orphaned Auth account so user can retry
-      debugPrint('🔴 [AuthService] Firestore write failed, rolling back Auth account…');
-      await credential.user!.delete();
-      debugPrint('🔴 [AuthService] Auth account deleted (rollback). User can retry.');
-      rethrow;
-    }
+    await _db.collection('users').doc(uid).set({
+      'uid': uid,
+      'name': name.trim(),
+      'email': email.trim(),
+      'phone': phone.trim(),
+      'role': 'customer',
+      'totalTrips': 0,
+      'totalSpend': 0.0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    debugPrint('✅ [AuthService] Firestore user doc written!');
 
     // 3) Update display name on Auth profile
     await credential.user!.updateDisplayName(name.trim());

@@ -1,0 +1,42 @@
+name: Flutter Build & Test
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Analyze
+        run: flutter analyze
+      
+      - name: Build APK
+        run: flutter build apk --release
+      
+      - name: Build AAB
+        run: flutter build appbundle --release
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.apk
+          path: build/app/outputs/apk/release/app-release.apk
+      
+      - name: Upload AAB
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab

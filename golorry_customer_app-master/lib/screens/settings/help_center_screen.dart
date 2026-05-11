@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../utils/app_colors.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -18,7 +18,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
 
   final _faqs = [
     _FAQ('Booking Issues', 'How do I book a truck?',
-        'Go to the Live tab → tap "Book a Lorry" → enter pickup & drop → select vehicle → confirm.'),
+        'Go to the Live tab → tap "Book a Lorry" → enter pickup & drop → confirm.'),
     _FAQ('Booking Issues', 'Can I cancel a booking?',
         'Yes, you can cancel before the driver accepts. Open the Bookings tab → select trip → Cancel.'),
     _FAQ('Payments', 'What payment methods are accepted?',

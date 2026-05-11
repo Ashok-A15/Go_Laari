@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'tracking_screen.dart';
+import 'package:golorry_customer_app/screens/tracking_screen.dart';
 
 class EstimateScreen extends StatelessWidget {
   final double distanceKm;

@@ -1,0 +1,34 @@
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": ["Hi", "Hello", "Hey", "Good morning", "Is anyone there?", "Hi there"],
+      "responses": ["Hello! I'm your GoLorry assistant. How can I help you move your load today?", "Hi! Ready to book a truck?"]
+    },
+    {
+      "tag": "book_truck",
+      "patterns": ["I want to book a truck", "Need a lorry for delivery", "Book a mini truck", "I have 5 tons of goods to move", "Need a truck from Delhi to Mumbai", "How to book a truck?"],
+      "responses": ["Sure! I can help with that. Please tell me your pickup and drop locations.", "I'll help you book a truck. What is the weight of your cargo?"]
+    },
+    {
+      "tag": "track_order",
+      "patterns": ["Where is my truck?", "Track my shipment", "Status of my booking", "When will my lorry arrive?", "Show me my active orders"],
+      "responses": ["I'm fetching your tracking details. One moment...", "You can view the live status in the 'Orders' tab. Would you like me to show it?"]
+    },
+    {
+      "tag": "pricing",
+      "patterns": ["How much does it cost?", "What are the rates?", "Price for 100km", "Is there a discount?", "Freight charges for Bangalore"],
+      "responses": ["Our rates start at ₹500 for local trips. For long distance, it depends on the weight and distance.", "I can give you an estimate. What is your destination?"]
+    },
+    {
+      "tag": "support",
+      "patterns": ["I have a problem", "Need help", "Talk to a human", "Complaint about driver", "Payment failed", "Customer care number"],
+      "responses": ["I'm sorry to hear that. I've raised a priority ticket for you. An agent will call you in 10 mins.", "Please describe your issue, and I will connect you with our support team."]
+    },
+    {
+      "tag": "cancel_order",
+      "patterns": ["Cancel my booking", "I want to stop the order", "Wrong booking", "Don't need the truck anymore"],
+      "responses": ["I can help cancel that. Please note that cancellation charges may apply if the driver is already on the way.", "Are you sure you want to cancel your current booking?"]
+    }
+  ]
+}

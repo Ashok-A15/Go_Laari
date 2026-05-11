@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/booking_model.dart';
+import 'package:golorry_customer_app/models/booking_model.dart';
 import 'user_service.dart';
 
 /// Handles all reads/writes to the `bookings` Firestore collection.
@@ -27,11 +27,21 @@ class BookingService {
   }
 
   // ── Cancel Booking ────────────────────────────────
-  /// Sets [bookingId] status to 'cancelled'.
+  /// Sets [bookingId] status to 'Cancelled'.
   Future<void> cancelBooking(String bookingId) async {
     await _db.collection('bookings').doc(bookingId).update({
-      'status': 'cancelled',
+      'status': 'Cancelled',
       'cancelledAt': FieldValue.serverTimestamp(),
+    });
+    _userService.refreshBookingStats();
+  }
+
+  // ── Complete Booking ──────────────────────────────
+  /// Sets [bookingId] status to 'Completed'.
+  Future<void> completeBooking(String bookingId) async {
+    await _db.collection('bookings').doc(bookingId).update({
+      'status': 'Completed',
+      'completedAt': FieldValue.serverTimestamp(),
     });
     _userService.refreshBookingStats();
   }
@@ -45,12 +55,10 @@ class BookingService {
     return _db
         .collection('bookings')
         .where('customerId', isEqualTo: _uid)
+        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) {
-          final list = snap.docs.map((doc) => BookingModel.fromFirestore(doc)).toList();
-          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          return list;
-        });
+        .map((snap) =>
+            snap.docs.map((doc) => BookingModel.fromFirestore(doc)).toList());
   }
 
   // ── Active Booking Stream ─────────────────────────
@@ -62,7 +70,7 @@ class BookingService {
     return _db
         .collection('bookings')
         .where('customerId', isEqualTo: _uid)
-        .where('status', whereIn: ['pending', 'accepted', 'in_transit'])
+        .where('status', isEqualTo: 'In Transit')
         .limit(1)
         .snapshots()
         .map((snap) =>

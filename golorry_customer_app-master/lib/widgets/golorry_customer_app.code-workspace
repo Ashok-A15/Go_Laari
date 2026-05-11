@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../golorry_driver_app"
+		},
+		{
+			"path": "../../../golorry_owner_app"
+		}
+	]
+}

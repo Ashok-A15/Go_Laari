@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "373993258946",
-    "project_id": "laari-app-owner-6c9d9",
-    "storage_bucket": "laari-app-owner-6c9d9.firebasestorage.app"
+    "project_number": "747871166233",
+    "project_id": "golorry-main",
+    "storage_bucket": "golorry-main.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:373993258946:android:a56f680474c2d0594da05b",
+        "mobilesdk_app_id": "1:747871166233:android:c638bfe66426f3f93aaf88",
         "android_client_info": {
           "package_name": "com.example.flutter_project_1"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBVUJUOjZH57NYkkb8EYfGJpodg02IrTVQ"
+          "current_key": "AIzaSyCd64IzvLWfiVmkdeEU64EJ0li6v1pggwc"
         }
       ],
       "services": {
@@ -26,7 +26,7 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:373993258946:android:d9dcf70fb7323f004da05b",
+        "mobilesdk_app_id": "1:747871166233:android:ab0a228015ef550f3aaf88",
         "android_client_info": {
           "package_name": "com.example.golorry_customer_app"
         }
@@ -34,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBVUJUOjZH57NYkkb8EYfGJpodg02IrTVQ"
+          "current_key": "AIzaSyCd64IzvLWfiVmkdeEU64EJ0li6v1pggwc"
         }
       ],
       "services": {

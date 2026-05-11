@@ -2,51 +2,32 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    function hasRole(role) {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    // ── Helper functions ────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // ── users/{uid} ──────────────────────────────────
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── users/{uid} ─────────────────────────────────
+    // A customer can read and write ONLY their own profile document.
     match /users/{uid} {
-      allow read:  if isSignedIn();          // any logged-in user can read profiles
-      allow write: if isOwner(uid) || hasRole('owner'); // owner can write to create drivers
+      allow read, write: if isOwner(uid);
     }
 
-    // ── bookings/{bookingId} ─────────────────────────
+    // ── bookings/{bookingId} ────────────────────────
+    // A customer can:
+    //   READ   → only their own bookings (customerId == uid)
+    //   CREATE → only if they set themselves as customerId
+    //   UPDATE → only their own bookings (e.g. for cancellation)
+    //   DELETE → not allowed (bookings are permanent records)
     match /bookings/{bookingId} {
-      // Customers see their own; drivers/owners see all bookings (for job list)
-      allow read: if isSignedIn() && (
-                    resource.data.customerId == request.auth.uid ||
-                    resource.data.driverId   == request.auth.uid ||
-                    hasRole('driver') ||
-                    hasRole('owner')
-                  );
-      // Only customers can create bookings for themselves
-      allow create: if hasRole('customer') &&
-                      request.resource.data.customerId == request.auth.uid;
-      // Customers cancel/update their own; drivers accept (set driverId + status)
-      allow update: if isSignedIn() && (
-                      resource.data.customerId == request.auth.uid ||
-                      resource.data.driverId   == request.auth.uid ||
-                      hasRole('driver') ||
-                      hasRole('owner')
-                    );
+      allow read:   if isSignedIn() && resource.data.customerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.customerId == request.auth.uid;
       allow delete: if false;
-    }
-
-    // ── drivers/{driverId} ───────────────────────────
-    match /drivers/{driverId} {
-      allow read:   if isSignedIn();
-      allow write:  if hasRole('owner') || isOwner(driverId);
-    }
-
-    // ── vehicles/{vehicleId} ─────────────────────────
-    match /vehicles/{vehicleId} {
-      allow read:   if isSignedIn();
-      allow write:  if hasRole('owner');
     }
   }
 }

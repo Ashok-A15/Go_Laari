@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
-import '../utils/app_colors.dart';
-import 'login_screen.dart';
+import 'package:golorry_customer_app/services/auth_service.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
+import 'package:golorry_customer_app/screens/login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -24,6 +24,26 @@ class _SignupScreenState extends State<SignupScreen> {
   String? _error;
   bool _success = false; // Added success state based on screenshot
 
+  /// Maps Firebase Auth error codes to clean user-facing messages.
+  String _friendlyAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'network-request-failed':
+        return 'No internet connection. Please check your network and try again.';
+      case 'email-already-in-use':
+        return 'This email is already registered. Please log in instead.';
+      case 'invalid-email':
+        return 'The email address is not valid.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'operation-not-allowed':
+        return 'Sign-up is currently disabled. Please try later.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a moment and try again.';
+      default:
+        return 'Sign up failed. Please try again.';
+    }
+  }
+
   Future<void> _signup() async {
     setState(() { _loading = true; _error = null; });
 
@@ -35,15 +55,10 @@ class _SignupScreenState extends State<SignupScreen> {
         throw Exception('Please enter your Email Address.');
       }
       if (_passwordController.text.length < 6) {
-        throw FirebaseAuthException(
-          code: 'weak-password',
-          message: 'Password must be at least 6 characters.',
-        );
+        setState(() => _error = 'Password must be at least 6 characters.');
+        return;
       }
 
-      debugPrint('🔵 [Signup] Attempting signup for: ${_emailController.text.trim()}');
-
-      // Single call: creates Auth account + writes Firestore user doc
       await _authService.signUpWithProfile(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
@@ -51,16 +66,12 @@ class _SignupScreenState extends State<SignupScreen> {
         password: _passwordController.text.trim(),
       );
 
-      debugPrint('✅ [Signup] Success!');
       setState(() => _success = true);
-
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } on FirebaseAuthException catch (e) {
-      debugPrint('🔴 [Signup] FirebaseAuthException: code=${e.code}, msg=${e.message}');
-      if (mounted) setState(() => _error = e.message ?? 'Signup failed. Please try again.');
-    } catch (e, stack) {
-      debugPrint('🔴 [Signup] Exception: $e\n$stack');
+      if (mounted) setState(() => _error = _friendlyAuthError(e));
+    } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted && !_success) setState(() => _loading = false);
@@ -84,14 +95,8 @@ class _SignupScreenState extends State<SignupScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDark
-                ? [const Color(0xFF112A34), const Color(0xFF0D1B2A)]
-                : [const Color(0xFF33DEBB), const Color(0xFF1D4ED8)],
-          ),
+        decoration: const BoxDecoration(
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Stack(
@@ -109,24 +114,32 @@ class _SignupScreenState extends State<SignupScreen> {
 
                   // Header
                   const SizedBox(height: 10),
+                  const Icon(
+                    Icons.local_shipping_rounded,
+                    size: 80,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 24),
                   Text(
                     'Create Account',
                     style: GoogleFonts.inter(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
                       color: Colors.white,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
                     'Join GoLorry as a Customer',
                     style: GoogleFonts.inter(
-                      fontSize: 14,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                       color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
 
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 40),
 
                   // Form Card
                   Expanded(
@@ -138,15 +151,9 @@ class _SignupScreenState extends State<SignupScreen> {
                             margin: const EdgeInsets.symmetric(horizontal: 24),
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                             decoration: BoxDecoration(
-                              color: isDark ? AppColors.cardElevated : Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                ),
-                              ],
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
                             ),
                             child: Column(
                               children: [
@@ -194,12 +201,39 @@ class _SignupScreenState extends State<SignupScreen> {
                                       color: AppColors.error.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    child: Text(
-                                      _error!,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 13,
-                                        color: AppColors.error,
-                                      ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.wifi_off_rounded,
+                                            size: 16,
+                                            color: AppColors.error),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _error!,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              color: AppColors.error,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                        if (_error!.contains('internet') || _error!.contains('network'))
+                                          GestureDetector(
+                                            onTap: _signup,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(left: 8),
+                                              child: Text(
+                                                'Retry',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.error,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -349,23 +383,24 @@ class _SignupScreenState extends State<SignupScreen> {
     VoidCallback? onVisibilityToggle,
     required bool isDark,
   }) {
-    final bgColor = isDark ? AppColors.surface : const Color(0xFFF9FAFB);
-    final iconColor = isDark ? AppColors.textMuted : const Color(0xFF6B7280);
-    final textColor = isDark ? AppColors.textPrimary : const Color(0xFF111827);
+    final bgColor = Colors.white.withValues(alpha: 0.15);
+    final iconColor = Colors.white.withValues(alpha: 0.8);
+    const textColor = Colors.white;
 
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
       ),
       child: TextField(
         controller: controller,
         obscureText: obscureText ?? false,
         keyboardType: inputType,
-        style: GoogleFonts.inter(color: textColor, fontSize: 15),
+        style: GoogleFonts.inter(color: textColor, fontSize: 16, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: GoogleFonts.inter(color: iconColor, fontSize: 15),
+          hintStyle: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.5), fontSize: 16),
           prefixIcon: Icon(icon, color: iconColor, size: 22),
           suffixIcon: isPassword
               ? IconButton(
@@ -380,12 +415,12 @@ class _SignupScreenState extends State<SignupScreen> {
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.white, width: 1.5),
           ),
           filled: true,
           fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         ),
       ),
     );

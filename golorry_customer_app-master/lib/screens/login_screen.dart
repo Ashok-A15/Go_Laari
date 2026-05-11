@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
-import '../utils/app_colors.dart';
-import 'signup_screen.dart';
+import 'package:golorry_customer_app/services/auth_service.dart';
+import 'package:golorry_customer_app/utils/app_colors.dart';
+import 'package:golorry_customer_app/screens/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,6 +21,26 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   String? _error;
 
+  /// Maps Firebase Auth error codes to clean user-facing messages.
+  String _friendlyAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'network-request-failed':
+        return 'No internet connection. Please check your network and try again.';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Incorrect email or password. Please try again.';
+      case 'invalid-email':
+        return 'The email address is not valid.';
+      case 'user-disabled':
+        return 'This account has been disabled. Please contact support.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a moment and try again.';
+      default:
+        return 'Login failed. Please try again.';
+    }
+  }
+
   Future<void> _login() async {
     setState(() {
       _loading = true;
@@ -32,15 +52,13 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
-
-      // Pop back to AuthGate, which will route to DashboardScreen since we are now logged in
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? 'Login failed');
+      setState(() => _error = _friendlyAuthError(e));
     } catch (_) {
-      setState(() => _error = 'Something went wrong');
+      setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -62,14 +80,8 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDark
-                ? [const Color(0xFF112A34), const Color(0xFF0D1B2A)]
-                : [const Color(0xFF33DEBB), const Color(0xFF1D4ED8)], // Light mode gets the bright Teal-Blue gradient
-          ),
+        decoration: const BoxDecoration(
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -83,33 +95,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               
-              const SizedBox(height: 10),
+              const SizedBox(height: 20),
 
-              // ── Header (Truck Icon + Text) ──────────────────────────
+              // ── Header (Truck Icon + Text matching the image) ──────────────────
               const Icon(
                 Icons.local_shipping_rounded,
-                size: 64,
+                size: 80,
                 color: Colors.white,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Text(
-                'Customer Login',
+                'Welcome to GoLorry',
                 style: GoogleFonts.inter(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
                   color: Colors.white,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                'Book your lorry with ease',
+                'Log in as Customer to continue',
                 style: GoogleFonts.inter(
-                  fontSize: 14,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
                   color: Colors.white.withValues(alpha: 0.8),
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
 
               // ── White Card Form ────────────────────────────────────
               Expanded(
@@ -121,15 +135,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         margin: const EdgeInsets.symmetric(horizontal: 24),
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                         decoration: BoxDecoration(
-                          color: isDark ? AppColors.cardElevated : Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
+                          color: Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
                         ),
                         child: Column(
                           children: [
@@ -164,9 +172,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Text(
                                 'Forgot Password?',
                                 style: GoogleFonts.inter(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
@@ -181,12 +189,43 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: AppColors.error.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: Text(
-                                  _error!,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: AppColors.error,
-                                  ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      (_error!.contains('internet') || _error!.contains('network'))
+                                          ? Icons.wifi_off_rounded
+                                          : Icons.error_outline_rounded,
+                                      size: 16,
+                                      color: AppColors.error,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _error!,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: AppColors.error,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_error!.contains('internet') || _error!.contains('network'))
+                                      GestureDetector(
+                                        onTap: _login,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(left: 8),
+                                          child: Text(
+                                            'Retry',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.error,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -277,22 +316,23 @@ class _LoginScreenState extends State<LoginScreen> {
     VoidCallback? onVisibilityToggle,
     required bool isDark,
   }) {
-    final bgColor = isDark ? AppColors.surface : const Color(0xFFF9FAFB);
-    final iconColor = isDark ? AppColors.textMuted : const Color(0xFF6B7280);
-    final textColor = isDark ? AppColors.textPrimary : const Color(0xFF111827);
+    final bgColor = Colors.white.withValues(alpha: 0.15);
+    final iconColor = Colors.white.withValues(alpha: 0.8);
+    const textColor = Colors.white;
 
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
       ),
       child: TextField(
         controller: controller,
         obscureText: obscureText ?? false,
-        style: GoogleFonts.inter(color: textColor, fontSize: 15),
+        style: GoogleFonts.inter(color: textColor, fontSize: 16, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: GoogleFonts.inter(color: iconColor, fontSize: 15),
+          hintStyle: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.5), fontSize: 16),
           prefixIcon: Icon(icon, color: iconColor, size: 22),
           suffixIcon: isPassword
               ? IconButton(
@@ -304,15 +344,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: onVisibilityToggle,
                 )
               : null,
-          border: InputBorder.none, // Removed default outlines to match the reference UI
+          border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5), // Tiny border on focus
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.white, width: 1.5),
           ),
           filled: true,
-          fillColor: Colors.transparent, // Color provided by Container
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          fillColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         ),
       ),
     );

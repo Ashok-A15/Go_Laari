@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../../Users/supri/golorry_customer_app"
+		},
+		{
+			"path": "../../../Users/supri/golorry_driver_app"
+		},
+		{
+			"path": "../../../Users/supri/golorry_owner_app"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "golorry_customer_app"
+	}
+}

@@ -18,12 +18,6 @@ class BookingModel {
   // We keep route/distance roughly as strings if needed, or just rely on pickup/drop
   final String route;
   final String distance;
-  final double? pickupLat;
-  final double? pickupLng;
-  final double? dropLat;
-  final double? dropLng;
-  final double? driverLat;
-  final double? driverLng;
 
   BookingModel({
     required this.id,
@@ -41,12 +35,6 @@ class BookingModel {
     this.driverId,
     required this.route,
     required this.distance,
-    this.pickupLat,
-    this.pickupLng,
-    this.dropLat,
-    this.dropLng,
-    this.driverLat,
-    this.driverLng,
   });
 
   factory BookingModel.fromFirestore(DocumentSnapshot doc) {
@@ -62,17 +50,11 @@ class BookingModel {
       valueOfGoods: data['valueOfGoods'] ?? '',
       paymentMethod: data['paymentMethod'] ?? 'Cash',
       totalFare: (data['totalFare'] ?? 0).toDouble(),
-      status: (data['status'] ?? 'pending').toString().toLowerCase(),
+      status: data['status'] ?? 'Pending',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      driverId: data['driverId'] ?? '',
+      driverId: data['driverId'],
       route: data['route'] ?? 'Unknown Route',
       distance: data['distance'] ?? '',
-      pickupLat: (data['pickupLat'] as num?)?.toDouble(),
-      pickupLng: (data['pickupLng'] as num?)?.toDouble(),
-      dropLat: (data['dropLat'] as num?)?.toDouble(),
-      dropLng: (data['dropLng'] as num?)?.toDouble(),
-      driverLat: (data['driverLocation'] as GeoPoint?)?.latitude,
-      driverLng: (data['driverLocation'] as GeoPoint?)?.longitude,
     );
   }
 
@@ -87,15 +69,11 @@ class BookingModel {
       'valueOfGoods': valueOfGoods,
       'paymentMethod': paymentMethod,
       'totalFare': totalFare,
-      'status': status.toLowerCase(), // always lowercase
+      'status': status,
       'createdAt': FieldValue.serverTimestamp(),
-      'driverId': driverId ?? '',    // empty string so driver can query
+      'driverId': driverId,
       'route': route,
       'distance': distance,
-      if (pickupLat != null) 'pickupLat': pickupLat,
-      if (pickupLng != null) 'pickupLng': pickupLng,
-      if (dropLat != null) 'dropLat': dropLat,
-      if (dropLng != null) 'dropLng': dropLng,
     };
   }
 }

@@ -1,0 +1,26 @@
+name: Firebase Distribution
+
+on:
+  workflow_run:
+    workflows: ["Flutter Build & Test"]
+    types: [completed]
+    branches: [master]
+
+jobs:
+  distribute:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+      
+      - name: Upload to Firebase
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          token: ${{ secrets.FIREBASE_CLI_TOKEN }}
+          file: app-release.apk/app-release.apk
+          releaseNotes: "Build #${{ github.run_number }}"
+          groups: "beta-testers"
