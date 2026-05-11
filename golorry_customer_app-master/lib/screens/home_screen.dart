@@ -60,6 +60,9 @@ class _HomeScreenState extends State<HomeScreen>
   String? _activeField;
   bool _pickupFocused = false;
   bool _dropFocused = false;
+  
+  // ── OPTIMIZATION: CACHED STREAMS ────────────────
+  late Stream<BookingModel?> _activeBookingStream;
 
   @override
   void initState() {
@@ -76,6 +79,10 @@ class _HomeScreenState extends State<HomeScreen>
 
     _loadData();
     _determinePosition();
+    
+    _activeBookingStream = BookingService().getActiveBooking().handleError((e) {
+      debugPrint('Booking stream error: $e');
+    });
   }
 
   @override
@@ -378,9 +385,7 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: StreamBuilder<BookingModel?>(
-        stream: BookingService().getActiveBooking().handleError((e) {
-          debugPrint('Booking stream error: $e');
-        }),
+        stream: _activeBookingStream,
         builder: (context, snapshot) {
           final activeBooking = snapshot.data;
 
@@ -491,7 +496,8 @@ class _HomeScreenState extends State<HomeScreen>
       final dCoord = await geo.getCoordinates(booking.dropAddress);
       
       if (pCoord == null || dCoord == null) {
-        if (mounted) setState(() { _lastBookingId = null; }); // Allow retry
+        // DO NOT set _lastBookingId to null here as it causes infinite rebuild loop
+        // Just return, the UI will handle missing coordinates
         return;
       }
 
@@ -515,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen>
       }
     } catch (e) {
       print('Tracking route error: $e');
-      if (mounted) setState(() { _lastBookingId = null; });
+      // DO NOT set _lastBookingId to null here as it causes infinite rebuild loop
     }
   }
 
@@ -566,6 +572,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
             },
             onMapCreated: (c) {
+              _mapController = c;
               if (_trackingPickup != null && _trackingDrop != null) {
                 LatLngBounds bounds;
                 if (_trackingPickup!.latitude > _trackingDrop!.latitude) {
