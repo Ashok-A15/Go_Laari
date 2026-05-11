@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
@@ -20,8 +20,11 @@ class _DashboardPageState extends State<DashboardPage>
   String userName = "User";
   bool _isOwner = false;
   bool _isLoading = true;
+  bool _isOnline = false;
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription<Position>? _locationSubscription;
+  StreamSubscription? _jobSubscription;
+  bool _hasNewJobAlert = false;
   Map<String, dynamic> _fleetStats = {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
 
   late AnimationController _animController;
@@ -34,11 +37,28 @@ class _DashboardPageState extends State<DashboardPage>
       duration: const Duration(milliseconds: 800),
     );
     _loadDashboardData();
+    _listenForJobs();
+  }
+
+  void _listenForJobs() {
+    _jobSubscription?.cancel();
+    _jobSubscription = _firestoreService.getAvailableBookingsStream().listen((snapshot) {
+      if (!_isOwner && _isOnline) {
+        final availableJobs = snapshot.docs.where((doc) => 
+          (doc.data()['driverId'] ?? '').toString().isEmpty
+        ).toList();
+
+        if (mounted) {
+          setState(() => _hasNewJobAlert = availableJobs.isNotEmpty);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _jobSubscription?.cancel();
     _animController.dispose();
     super.dispose();
   }
@@ -51,8 +71,9 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   void _startLocationSharing() {
-    if (_isOwner) return;
+    if (_isOwner || !_isOnline) return;
 
+    _locationSubscription?.cancel();
     _locationSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -61,6 +82,27 @@ class _DashboardPageState extends State<DashboardPage>
     ).listen((Position position) {
       _firestoreService.updateDriverLocation(position.latitude, position.longitude);
     });
+  }
+
+  void _toggleOnlineStatus(bool value) async {
+    setState(() {
+      _isOnline = value;
+      if (!value) _hasNewJobAlert = false;
+    });
+    
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && !_isOwner) {
+      await FirebaseFirestore.instance.collection('drivers').doc(user.uid).update({
+        'isOnline': value,
+      });
+    }
+
+    if (value) {
+      _startLocationSharing();
+    } else {
+      _locationSubscription?.cancel();
+      _locationSubscription = null;
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -85,12 +127,13 @@ class _DashboardPageState extends State<DashboardPage>
         setState(() {
           userName = snap.exists ? (snap.data()?["name"] ?? "User") : "User";
           _isOwner = role == 'owner';
+          _isOnline = snap.exists ? (snap.data()?["isOnline"] ?? false) : false;
           _fleetStats = stats;
           _isLoading = false;
         });
         _animController.forward();
         
-        if (role == 'driver') {
+        if (role == 'driver' && _isOnline) {
           _startLocationSharing();
         }
       }
@@ -118,241 +161,217 @@ class _DashboardPageState extends State<DashboardPage>
     return Scaffold(
       extendBody: true,
       backgroundColor: isDark ? const Color(0xFF0F171A) : const Color(0xFFF8FAF9),
-      appBar: AppBar(
-        title: Text(_isOwner ? "Owner Dashboard" : "Driver Dashboard"),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () {},
+      appBar: null,
+      body: Stack(
+        children: [
+          // 1. Full Screen Map
+          const Positioned.fill(
+            child: OwnerMap(),
           ),
-          const SizedBox(width: 10),
-        ],
-      ),
-      body: FadeTransition(
-        opacity: _animController,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Greeting card
-              Container(
-                padding: const EdgeInsets.all(20),
+
+          // 2. Floating Header Card (Matching Bottom Style)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 15,
+            right: 15,
+            child: FadeTransition(
+              opacity: _animController,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF1E272E), const Color(0xFF2C3E50)]
-                        : [const Color(0xFF43CEA2), const Color(0xFF185A9D)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
+                  color: isDark 
+                    ? const Color(0xFF1E272E).withValues(alpha: 0.9) 
+                    : Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF185A9D).withValues(alpha: 0.2),
-                      blurRadius: 15,
-                      offset: const Offset(0, 8),
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
                     ),
                   ],
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
-                      ),
-                      child: CircleAvatar(
-                        radius: 25,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        child: Text(
-                          userName.isNotEmpty ? userName[0].toUpperCase() : "U",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 15),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            "${_getGreeting()} 👋",
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
+                            _isOwner ? "Owner Fleet" : "Driver Dashboard",
+                            style: TextStyle(
+                              fontSize: 16, 
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : const Color(0xFF185A9D),
+                            ),
                           ),
                           Text(
-                            userName,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                            "${_getGreeting()}, $userName 👋",
+                            style: TextStyle(
+                              fontSize: 11, 
+                              color: isDark ? Colors.white70 : Colors.grey.shade600,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
+                    if (!_isOwner) ...[
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _isOnline ? "ONLINE" : "OFFLINE",
+                            style: TextStyle(
+                              fontSize: 8, 
+                              fontWeight: FontWeight.bold,
+                              color: _isOnline ? Colors.green : Colors.grey,
+                            ),
+                          ),
+                          SizedBox(
+                            height: 24,
+                            child: Transform.scale(
+                              scale: 0.7,
+                              child: Switch(
+                                value: _isOnline,
+                                activeColor: const Color(0xFF43CEA2),
+                                onChanged: _toggleOnlineStatus,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        _isOwner ? "Owner" : "Driver",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      const SizedBox(width: 8),
+                    ],
+                    IconButton(
+                      icon: const Icon(Icons.notifications_none_rounded, size: 20),
+                      onPressed: () {},
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // 2. Top UI Elements (Stats for Owner)
+          if (_isOwner)
+            Positioned(
+              top: 20,
+              left: 20,
+              right: 20,
+              child: FadeTransition(
+                opacity: _animController,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 100,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _statCard("${_fleetStats['total']}", "Total", Icons.local_shipping_rounded, 
+                              [const Color(0xFF6dd5ed), const Color(0xFF2193b0)]),
+                          _statCard("${_fleetStats['active']}", "Active", Icons.play_arrow_rounded, 
+                              [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
+                          _statCard("${_fleetStats['idle']}", "Idle", Icons.pause_circle_rounded, 
+                              [const Color(0xFFff9966), const Color(0xFFff5e62)]),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 25),
+            ),
 
-              if (_isOwner) ...[
-                const Text(
-                  "Fleet Overview",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 15),
-                SizedBox(
-                  height: 120,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+          // 2.5 New Job Alert Banner
+          if (_hasNewJobAlert && !_isOwner)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 90,
+              left: 20,
+              right: 20,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF43CEA2),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF43CEA2).withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
                     children: [
-                      _statCard("${_fleetStats['total']}", "Total Laaris", Icons.local_shipping_rounded, 
-                          [const Color(0xFF6dd5ed), const Color(0xFF2193b0)]),
-                      _statCard("${_fleetStats['active']}", "Active", Icons.play_arrow_rounded, 
-                          [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
-                      _statCard("${_fleetStats['idle']}", "Idle", Icons.pause_circle_rounded, 
-                          [const Color(0xFFff9966), const Color(0xFFff5e62)]),
-                      _statCard("₹${(_fleetStats['earnings'] as num?)?.toStringAsFixed(0) ?? '0'}", "Earnings", Icons.account_balance_wallet_rounded, 
-                          [const Color(0xFF56ab2f), const Color(0xFFa8e063)]),
+                      Icon(Icons.notifications_active, color: Colors.white, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "New Job Available! Tap to view",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios, color: Colors.white, size: 12),
                     ],
                   ),
                 ),
-                const SizedBox(height: 30),
-              ],
+              ),
+            ),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _isOwner ? "Active Tracking" : "My Current Location",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          // 3. Floating Quick Info for Driver
+          if (!_isOwner)
+            Positioned(
+              bottom: 120,
+              left: 20,
+              right: 20,
+              child: FadeTransition(
+                opacity: _animController,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
                   ),
-                  if (_isOwner)
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text("View All"),
-                    )
-                  else
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
-                      },
-                      child: const Text("Active Trip"),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Container(
-                height: 300,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: const OwnerMap(),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text("Status: Online", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                          Text("Waiting for new jobs...", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF43CEA2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text("Jobs"),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-              if (!_isOwner) ...[
-                const SizedBox(height: 30),
-                _buildTakeJobButton(),
-              ],
-              const SizedBox(height: 100),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTakeJobButton() {
-    return Container(
-      width: double.infinity,
-      height: 100,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF185A9D).withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
+            ),
         ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
-          },
-          borderRadius: BorderRadius.circular(24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 32),
-              ),
-              const SizedBox(width: 20),
-              const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text(
-                    "Take New Job",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  Text(
-                    "Available nearby trips",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

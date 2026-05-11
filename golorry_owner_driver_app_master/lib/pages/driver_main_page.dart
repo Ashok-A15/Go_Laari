@@ -1,7 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'dashboard_page.dart';
 import 'bookings_page.dart';
-import 'driver_profile_page.dart';
+import 'earnings_page.dart';
 import 'settings_page.dart';
 
 class DriverMainPage extends StatefulWidget {
@@ -17,7 +17,7 @@ class _DriverMainPageState extends State<DriverMainPage> {
   final List<Widget> _pages = const [
     DashboardPage(),
     BookingsPage(),
-    DriverProfilePage(),
+    EarningsPage(),
     SettingsPage(),
   ];
 
@@ -49,7 +49,7 @@ class _DriverMainPageState extends State<DriverMainPage> {
             children: [
               _buildNavItem(0, Icons.dashboard_rounded, "Home"),
               _buildNavItem(1, Icons.history_rounded, "History"),
-              _buildNavItem(2, Icons.person_rounded, "Profile"),
+              _buildNavItem(2, Icons.account_balance_wallet_rounded, "Earnings"),
               _buildNavItem(3, Icons.settings_rounded, "Settings"),
             ],
           ),

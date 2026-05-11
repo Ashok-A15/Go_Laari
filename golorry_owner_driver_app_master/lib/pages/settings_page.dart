@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../main.dart'; // To access themeNotifier
 import 'role_selection_page.dart';
 import 'profile_info_page.dart';
+import 'profile_page.dart';
+import 'driver_profile_page.dart';
 import 'change_password_page.dart';
 import 'notification_settings_page.dart';
 import 'help_center_page.dart';
@@ -18,15 +20,22 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  String _userRole = 'owner';
 
   @override
   void initState() {
     super.initState();
+    _loadRole();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
     _animationController.forward();
+  }
+
+  void _loadRole() async {
+    final role = await FirestoreService().getUserRole();
+    if (mounted) setState(() => _userRole = role);
   }
 
   @override
@@ -76,15 +85,22 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                 _buildAnimatedSection("Account", 0),
                 _buildAnimatedTile(
                   Icons.person_outline_rounded,
-                  "Profile Information",
-                  () => _navigateTo(const ProfileInfoPage()),
+                  _userRole == 'owner' ? "Owner Profile Dashboard" : "Driver Profile Dashboard",
+                  () => _navigateTo(_userRole == 'owner' ? const ProfilePage() : const DriverProfilePage()),
                   1,
                 ),
+                if (_userRole == 'driver')
+                  _buildAnimatedTile(
+                    Icons.sos_rounded,
+                    "Emergency SOS",
+                    _showSOSDialog,
+                    2,
+                  ),
                 _buildAnimatedTile(
                   Icons.lock_outline_rounded,
                   "Change Password",
                   () => _navigateTo(const ChangePasswordPage()),
-                  2,
+                  3,
                 ),
                 _buildAnimatedTile(
                   Icons.notifications_none_rounded,
@@ -182,6 +198,24 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
 
   void _navigateTo(Widget page) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  void _showSOSDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirm SOS?"),
+        content: const Text("This will alert the fleet owner and emergency services immediately."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text("SEND SOS"),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildAnimatedSection(String title, int index) {

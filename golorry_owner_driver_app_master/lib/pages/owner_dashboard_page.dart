@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../widgets/owner_map.dart';
 import '../services/firestore_service.dart';
 
@@ -13,6 +14,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
   final GlobalKey<OwnerMapState> _mapKey = GlobalKey<OwnerMapState>();
   final FirestoreService _firestoreService = FirestoreService();
   Map<String, dynamic> _fleetStats = {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
+  MapType _currentMapType = MapType.normal;
 
   @override
   void initState() {
@@ -36,6 +38,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
           OwnerMap(
             key: _mapKey,
             showDefaultLocationButton: false,
+            mapType: _currentMapType,
           ),
           
           // Fleet Status Card
@@ -135,8 +138,98 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                   _loadFleetStats();
                 }),
                 const SizedBox(height: 12),
-                _buildActionButton(context, Icons.layers_rounded, () {}),
+                _buildActionButton(context, Icons.layers_rounded, _showMapTypeSelector),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMapTypeSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Select Map Type",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildMapTypeOption(MapType.normal, "Default", Icons.map_rounded),
+                _buildMapTypeOption(MapType.satellite, "Satellite", Icons.satellite_alt_rounded),
+                _buildMapTypeOption(MapType.terrain, "Transport", Icons.terrain_rounded),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapTypeOption(MapType type, String label, IconData icon) {
+    final isSelected = _currentMapType == type;
+    final theme = Theme.of(context);
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() => _currentMapType = type);
+        Navigator.pop(context);
+      },
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF43CEA2).withValues(alpha: 0.1) : theme.cardColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF43CEA2) : Colors.grey.withValues(alpha: 0.1),
+                width: 2,
+              ),
+              boxShadow: [
+                if (isSelected)
+                  BoxShadow(
+                    color: const Color(0xFF43CEA2).withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: isSelected ? const Color(0xFF43CEA2) : Colors.grey,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? const Color(0xFF43CEA2) : Colors.grey,
             ),
           ),
         ],

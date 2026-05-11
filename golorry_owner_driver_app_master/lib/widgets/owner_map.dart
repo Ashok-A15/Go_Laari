@@ -11,11 +11,13 @@ import '../services/firestore_service.dart';
 class OwnerMap extends StatefulWidget {
   final Function(GoogleMapController)? onMapCreated;
   final bool showDefaultLocationButton;
+  final MapType mapType;
 
   const OwnerMap({
     super.key, 
     this.onMapCreated,
     this.showDefaultLocationButton = true,
+    this.mapType = MapType.normal,
   });
 
   @override
@@ -151,6 +153,7 @@ class OwnerMapState extends State<OwnerMap> {
     return Stack(
       children: [
         GoogleMap(
+          mapType: widget.mapType,
           initialCameraPosition: const CameraPosition(
             target: LatLng(12.3077, 76.6533),
             zoom: 13,

@@ -1,6 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'owner_dashboard_page.dart';
-import 'profile_page.dart';
 import 'settings_page.dart';
 import 'drivers_page.dart';
 import 'bookings_page.dart';
@@ -19,7 +18,6 @@ class _OwnerMainPageState extends State<OwnerMainPage> {
     OwnerDashboardPage(),
     DriversPage(),
     BookingsPage(),
-    ProfilePage(),
     SettingsPage(),
   ];
 
@@ -52,8 +50,7 @@ class _OwnerMainPageState extends State<OwnerMainPage> {
               _buildNavItem(0, Icons.dashboard_rounded, "Home"),
               _buildNavItem(1, Icons.local_shipping_rounded, "Drivers"),
               _buildNavItem(2, Icons.receipt_long_rounded, "Bookings"),
-              _buildNavItem(3, Icons.person_rounded, "Profile"),
-              _buildNavItem(4, Icons.settings_rounded, "Settings"),
+              _buildNavItem(3, Icons.settings_rounded, "Settings"),
             ],
           ),
         ),
