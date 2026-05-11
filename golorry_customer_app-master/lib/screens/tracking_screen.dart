@@ -182,7 +182,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         totalFare: widget.totalFare,
         route: '${widget.pickupAddress.split(',')[0]} → ${widget.dropAddress.split(',')[0]}',
         distance: '${(_distanceKm ?? 8.5).toStringAsFixed(1)} km • ${(_durationMin ?? 25).toStringAsFixed(0)} min',
-        status: 'In Transit',
+        status: 'pending',
         createdAt: DateTime.now(),
       );
       await BookingService().createBooking(booking);
