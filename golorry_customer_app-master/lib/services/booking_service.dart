@@ -83,4 +83,14 @@ class BookingService {
     final doc = await _db.collection('bookings').doc(bookingId).get();
     return doc.exists ? BookingModel.fromFirestore(doc) : null;
   }
+
+  /// Live stream of a specific booking (for real-time tracking)
+  Stream<BookingModel?> getBookingStream(String bookingId) {
+    return _db.collection('bookings').doc(bookingId).snapshots().map((doc) {
+      if (doc.exists) {
+        return BookingModel.fromFirestore(doc);
+      }
+      return null;
+    });
+  }
 }

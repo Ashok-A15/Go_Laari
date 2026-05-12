@@ -92,10 +92,11 @@ class FirestoreService {
   }
 
   // Update driver location
-  Future<void> updateDriverLocation(double lat, double lng) async {
+  Future<void> updateDriverLocation(double lat, double lng, [double heading = 0.0]) async {
     if (currentUid.isEmpty) return;
     await _db.collection('drivers').doc(currentUid).update({
       'currentLocation': GeoPoint(lat, lng),
+      'heading': heading,
       'lastLocationUpdate': FieldValue.serverTimestamp(),
     });
   }
@@ -244,13 +245,14 @@ class FirestoreService {
   }
 
   // Update driver live GPS location inside the active booking (for customer tracking)
-  Future<void> updateBookingLocation(String bookingId, double lat, double lng) async {
+  Future<void> updateBookingLocation(String bookingId, double lat, double lng, [double heading = 0.0]) async {
     await _db.collection('bookings').doc(bookingId).update({
       'driverLocation': GeoPoint(lat, lng),
+      'driverHeading': heading,
       'locationUpdatedAt': FieldValue.serverTimestamp(),
     });
     // Also update the driver document so owner map shows it
-    await updateDriverLocation(lat, lng);
+    await updateDriverLocation(lat, lng, heading);
   }
 
   // Stream the active booking for a driver (real-time)
