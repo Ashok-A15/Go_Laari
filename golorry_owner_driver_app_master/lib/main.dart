@@ -8,15 +8,21 @@ import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/owner_dashboard_page.dart';
 import 'pages/splash_screen.dart';
+import 'services/background_service.dart';
 
 // Global Theme Notifier for Dark Mode
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Initialize Background Location Service
+  await BackgroundService.initializeService();
+
   runApp(const GoLorryOwnerApp());
 }
 

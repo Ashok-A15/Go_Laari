@@ -20,6 +20,8 @@ class BookingModel {
   // We keep route/distance roughly as strings if needed, or just rely on pickup/drop
   final String route;
   final String distance;
+  final String? eta;
+  final String? distanceRemaining;
 
   BookingModel({
     required this.id,
@@ -39,6 +41,8 @@ class BookingModel {
     this.driverHeading,
     required this.route,
     required this.distance,
+    this.eta,
+    this.distanceRemaining,
   });
 
   factory BookingModel.fromFirestore(DocumentSnapshot doc) {
@@ -61,6 +65,8 @@ class BookingModel {
       driverHeading: (data['driverHeading'] as num?)?.toDouble(),
       route: data['route'] ?? 'Unknown Route',
       distance: data['distance'] ?? '',
+      eta: data['eta'],
+      distanceRemaining: data['distanceRemaining'],
     );
   }
 

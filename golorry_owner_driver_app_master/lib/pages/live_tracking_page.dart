@@ -9,6 +9,7 @@ import '../services/geocoding_service.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'driver_main_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'dart:ui' as ui;
 
 class LiveTrackingPage extends StatefulWidget {
@@ -48,6 +49,9 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   String _tripStatus = 'accepted'; // accepted → in_transit → completed
   bool _isUpdating = false;
   int _locationUpdateCount = 0;
+  String _eta = '--';
+  String _distanceRemaining = '--';
+  DateTime? _lastEtaUpdate;
 
   // ── Animation (pulsing marker) ────────────────────────────────────────
   late AnimationController _pulseController;
@@ -235,6 +239,13 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       return;
     }
 
+    // Start background service for production-grade tracking
+    final service = FlutterBackgroundService();
+    if (!(await service.isRunning())) {
+      await service.startService();
+    }
+    service.invoke('setBookingId', {'bookingId': widget.bookingId});
+
     // Get first fix immediately
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -327,11 +338,38 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     // Smoothly follow driver on map
     _mapController?.animateCamera(CameraUpdate.newLatLng(latLng));
 
-    // Upload to Firestore (throttle: every update, distanceFilter handles rate)
+    // Update ETA and Distance every 1 minute or if it's the first time
+    if (_dropLatLng != null && (_lastEtaUpdate == null || DateTime.now().difference(_lastEtaUpdate!).inMinutes >= 1)) {
+      _updateEta(latLng);
+    }
+
+    // Upload to Firestore
     if (_tripStatus != 'completed') {
       _firestoreService
-          .updateBookingLocation(widget.bookingId, pos.latitude, pos.longitude, pos.heading)
+          .updateBookingLocation(
+            widget.bookingId, 
+            pos.latitude, 
+            pos.longitude, 
+            pos.heading,
+            eta: _eta,
+            distanceRemaining: _distanceRemaining,
+          )
           .catchError((e) => debugPrint('Location update failed: $e'));
+    }
+  }
+
+  Future<void> _updateEta(LatLng currentPos) async {
+    if (_dropLatLng == null) return;
+    
+    final geoService = GeocodingService(_apiKey);
+    final directions = await geoService.getDirectionsFromLatLng(currentPos, _dropLatLng!);
+    
+    if (directions != null && mounted) {
+      setState(() {
+        _eta = directions['duration'] ?? '--';
+        _distanceRemaining = directions['distance'] ?? '--';
+        _lastEtaUpdate = DateTime.now();
+      });
     }
   }
 
@@ -398,7 +436,11 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     setState(() => _isUpdating = true);
     try {
       await _firestoreService.updateTripStatus(widget.bookingId, 'completed');
-      _locationSub?.cancel(); // Stop GPS uploads
+      
+      // Stop background tracking
+      _locationSub?.cancel(); 
+      FlutterBackgroundService().invoke('stopService');
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Trip completed! Great job 🎉'),
@@ -626,20 +668,27 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
                           }
                         },
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF185A9D).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '₹$_fare',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF185A9D),
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹$_fare',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF185A9D),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$_eta ($_distanceRemaining)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

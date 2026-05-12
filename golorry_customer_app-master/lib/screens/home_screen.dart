@@ -729,7 +729,9 @@ class _HomeScreenState extends State<HomeScreen>
                           const Icon(Icons.person_pin_circle_rounded, size: 12, color: Color(0xFF00D4AA)),
                           const SizedBox(width: 4),
                           Text(
-                            'Driver Connected',
+                            booking.eta != null 
+                              ? 'Arriving in ${booking.eta}' 
+                              : 'Driver Connected',
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -754,7 +756,9 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'ID: ${booking.id.substring(0, 8)}',
+                          booking.distanceRemaining != null 
+                            ? '${booking.distanceRemaining} away'
+                            : 'ID: ${booking.id.substring(0, 8)}',
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             color: AppColors.textMuted,

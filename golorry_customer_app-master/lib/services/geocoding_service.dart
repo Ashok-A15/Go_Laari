@@ -72,7 +72,16 @@ class GeocodingService {
   Future<Map<String, dynamic>?> getDirections(String origin, String destination) async {
     final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/directions/json?origin=${Uri.encodeComponent(origin)}&destination=${Uri.encodeComponent(destination)}&key=$_apiKey');
+    return _fetchDirections(url);
+  }
 
+  Future<Map<String, dynamic>?> getDirectionsFromLatLng(LatLng origin, LatLng destination) async {
+    final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$_apiKey');
+    return _fetchDirections(url);
+  }
+
+  Future<Map<String, dynamic>?> _fetchDirections(Uri url) async {
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
