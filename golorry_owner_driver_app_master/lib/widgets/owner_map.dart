@@ -82,60 +82,60 @@ class OwnerMapState extends State<OwnerMap> {
     try {
       final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(pictureRecorder);
-      const double size = 150.0; // Slightly larger for detail
+      const double size = 80.0; // Much smaller size as requested
       
-      // Paint for the truck body
+      // Paint for the truck body (Silver/Grey)
       final Paint bodyPaint = Paint()
-        ..color = const Color(0xFF185A9D) // Premium blue
+        ..color = const Color(0xFFB0BEC5) 
         ..style = PaintingStyle.fill;
 
-      // Paint for the cabin
+      // Paint for the cabin (White)
       final Paint cabinPaint = Paint()
-        ..color = const Color(0xFF2B5CB2)
+        ..color = Colors.white
         ..style = PaintingStyle.fill;
 
-      // Paint for details (windows/highlights)
+      // Paint for details (Windows - Dark Grey)
       final Paint detailPaint = Paint()
-        ..color = Colors.white.withOpacity(0.3)
+        ..color = const Color(0xFF37474F).withOpacity(0.8)
         ..style = PaintingStyle.fill;
 
       // Shadow
       final Paint shadowPaint = Paint()
         ..color = Colors.black.withOpacity(0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
       // Draw shadow
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25 + 4, size * 0.1 + 4, size * 0.5, size * 0.8),
-          const Radius.circular(8),
+          Rect.fromLTWH(size * 0.25 + 2, size * 0.1 + 2, size * 0.5, size * 0.8),
+          const Radius.circular(4),
         ),
         shadowPaint,
       );
 
-      // Draw Main Body (Back of the truck)
+      // Draw Main Body (Back of the truck - Grey)
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
-          const Radius.circular(4),
+          const Radius.circular(2),
         ),
         bodyPaint,
       );
 
-      // Draw Cabin (Front of the truck)
+      // Draw Cabin (Front of the truck - White)
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
-          const Radius.circular(8),
+          const Radius.circular(6),
         ),
         cabinPaint,
       );
 
-      // Windows
+      // Windshield (Dark)
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.3, size * 0.15, size * 0.4, size * 0.1),
-          const Radius.circular(2),
+          Rect.fromLTWH(size * 0.3, size * 0.12, size * 0.4, size * 0.08),
+          const Radius.circular(1),
         ),
         detailPaint,
       );

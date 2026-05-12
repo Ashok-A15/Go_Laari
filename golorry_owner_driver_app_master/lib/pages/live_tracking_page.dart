@@ -106,28 +106,28 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     try {
       final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(pictureRecorder);
-      const double size = 150.0;
+      const double size = 80.0;
       
       final Paint bodyPaint = Paint()
-        ..color = const Color(0xFF185A9D)
+        ..color = const Color(0xFFB0BEC5) 
         ..style = PaintingStyle.fill;
 
       final Paint cabinPaint = Paint()
-        ..color = const Color(0xFF2B5CB2)
+        ..color = Colors.white
         ..style = PaintingStyle.fill;
 
       final Paint detailPaint = Paint()
-        ..color = Colors.white.withOpacity(0.3)
+        ..color = const Color(0xFF37474F).withOpacity(0.8)
         ..style = PaintingStyle.fill;
 
       final Paint shadowPaint = Paint()
         ..color = Colors.black.withOpacity(0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25 + 4, size * 0.1 + 4, size * 0.5, size * 0.8),
-          const Radius.circular(8),
+          Rect.fromLTWH(size * 0.25 + 2, size * 0.1 + 2, size * 0.5, size * 0.8),
+          const Radius.circular(4),
         ),
         shadowPaint,
       );
@@ -135,7 +135,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
-          const Radius.circular(4),
+          const Radius.circular(2),
         ),
         bodyPaint,
       );
@@ -143,15 +143,15 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
-          const Radius.circular(8),
+          const Radius.circular(6),
         ),
         cabinPaint,
       );
 
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.3, size * 0.15, size * 0.4, size * 0.1),
-          const Radius.circular(2),
+          Rect.fromLTWH(size * 0.3, size * 0.12, size * 0.4, size * 0.08),
+          const Radius.circular(1),
         ),
         detailPaint,
       );
