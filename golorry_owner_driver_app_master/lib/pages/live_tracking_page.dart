@@ -5,7 +5,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 import '../services/firestore_service.dart';
+import '../services/geocoding_service.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'driver_main_page.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:ui' as ui;
 
 class LiveTrackingPage extends StatefulWidget {
   final String bookingId;
@@ -26,11 +30,15 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   // ── Map ──────────────────────────────────────────────────────────────
   GoogleMapController? _mapController;
   LatLng? _driverLatLng;
+  BitmapDescriptor laariIcon = BitmapDescriptor.defaultMarker;
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
   final List<LatLng> _routePoints = [];
   LatLng? _pickupLatLng;
   LatLng? _dropLatLng;
+  List<LatLng> _fullRoutePoints = [];
+
+  static const _apiKey = 'AIzaSyByiIPu7kHZroCo8L6bgOVIk2t2riBdM4A';
 
   // ── Location stream ───────────────────────────────────────────────────
   StreamSubscription<Position>? _locationSub;
@@ -91,6 +99,74 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
 
     _requestPermissionAndStartTracking();
     _listenToBookingUpdates();
+    _setCustomMarker();
+  }
+
+  Future<void> _setCustomMarker() async {
+    try {
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+      const double size = 150.0;
+      
+      final Paint bodyPaint = Paint()
+        ..color = const Color(0xFF185A9D)
+        ..style = PaintingStyle.fill;
+
+      final Paint cabinPaint = Paint()
+        ..color = const Color(0xFF2B5CB2)
+        ..style = PaintingStyle.fill;
+
+      final Paint detailPaint = Paint()
+        ..color = Colors.white.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
+
+      final Paint shadowPaint = Paint()
+        ..color = Colors.black.withOpacity(0.2)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25 + 4, size * 0.1 + 4, size * 0.5, size * 0.8),
+          const Radius.circular(8),
+        ),
+        shadowPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
+          const Radius.circular(4),
+        ),
+        bodyPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
+          const Radius.circular(8),
+        ),
+        cabinPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.3, size * 0.15, size * 0.4, size * 0.1),
+          const Radius.circular(2),
+        ),
+        detailPaint,
+      );
+
+      final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (mounted && data != null) {
+        setState(() {
+          laariIcon = BitmapDescriptor.bytes(data.buffer.asUint8List());
+        });
+      }
+    } catch (e) {
+      debugPrint("Error generating custom marker: $e");
+    }
   }
 
   Future<void> _fetchCoordinates() async {
@@ -107,6 +183,17 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           _dropLatLng = LatLng(locations.first.latitude, locations.first.longitude);
         }
       }
+
+      if (_pickup.isNotEmpty && _drop.isNotEmpty) {
+        final geoService = GeocodingService(_apiKey);
+        final directions = await geoService.getDirections(_pickup, _drop);
+        if (directions != null) {
+          final polylinePoints = PolylinePoints();
+          List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
+          _fullRoutePoints = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
+        }
+      }
+
       if (mounted) {
         // Trigger a fake position update to refresh markers and polylines if we have a position
         if (_driverLatLng != null) {
@@ -177,10 +264,11 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         ..add(Marker(
           markerId: const MarkerId('driver'),
           position: latLng,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          rotation: pos.heading,
+          icon: laariIcon,
           anchor: const Offset(0.5, 0.5),
           infoWindow: const InfoWindow(title: 'Your Location'),
-          zIndexInt: 2,
+          zIndex: 2,
         ));
 
       if (_pickupLatLng != null) {
@@ -214,13 +302,22 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           endCap: Cap.roundCap,
         ));
 
-      if (_pickupLatLng != null && _dropLatLng != null) {
+      if (_fullRoutePoints.isNotEmpty) {
+        _polylines.add(Polyline(
+          polylineId: const PolylineId('route_full'),
+          points: _fullRoutePoints,
+          color: const Color(0xFF185A9D), // Same solid dark blue as Uber/Google
+          width: 6, // Thick solid line
+          jointType: JointType.round,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ));
+      } else if (_pickupLatLng != null && _dropLatLng != null) {
         _polylines.add(Polyline(
           polylineId: const PolylineId('route_full'),
           points: [_pickupLatLng!, _dropLatLng!],
-          color: const Color(0xFF185A9D), // Same color as driver marker
-          width: 4,
-          patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+          color: const Color(0xFF185A9D),
+          width: 6,
         ));
       }
 
@@ -233,7 +330,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     // Upload to Firestore (throttle: every update, distanceFilter handles rate)
     if (_tripStatus != 'completed') {
       _firestoreService
-          .updateBookingLocation(widget.bookingId, pos.latitude, pos.longitude)
+          .updateBookingLocation(widget.bookingId, pos.latitude, pos.longitude, pos.heading)
           .catchError((e) => debugPrint('Location update failed: $e'));
     }
   }
@@ -509,25 +606,43 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
                   ),
                   const SizedBox(height: 20),
 
-                  // Fare badge
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF185A9D).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
+                  // Fare badge and Call button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.withOpacity(0.1),
+                          foregroundColor: Colors.green,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        ),
+                        icon: const Icon(Icons.call, size: 18),
+                        label: const Text('Call Customer'),
+                        onPressed: () async {
+                          final Uri url = Uri.parse('tel:+919876543210'); // Placeholder phone number
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url);
+                          }
+                        },
                       ),
-                      child: Text(
-                        '₹$_fare',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF185A9D),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF185A9D).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '₹$_fare',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF185A9D),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 16),
 

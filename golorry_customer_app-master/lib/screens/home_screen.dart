@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,6 +17,7 @@ import 'package:golorry_customer_app/screens/location_select_screen.dart';
 import 'package:golorry_customer_app/screens/tracking_screen.dart';
 import 'package:golorry_customer_app/screens/more_details_screen.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -48,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen>
   LatLng? _trackingDrop;
   String? _lastBookingId;
   List<LatLng> _polylineCoordinates = [];
+  BitmapDescriptor _laariIcon = BitmapDescriptor.defaultMarker;
 
   // ── BOOKING WORKFLOW STATE ────────────────────
   bool _isSearching = false;
@@ -79,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     _loadData();
     _determinePosition();
+    _setCustomMarker();
     
     _activeBookingStream = BookingService().getActiveBooking().handleError((e) {
       debugPrint('Booking stream error: $e');
@@ -161,6 +166,73 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       debugPrint('Location error: $e');
       if (mounted) setState(() => _loadingLocation = false);
+    }
+  }
+
+  Future<void> _setCustomMarker() async {
+    try {
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+      const double size = 150.0;
+      
+      final Paint bodyPaint = Paint()
+        ..color = const Color(0xFF185A9D)
+        ..style = PaintingStyle.fill;
+
+      final Paint cabinPaint = Paint()
+        ..color = const Color(0xFF2B5CB2)
+        ..style = PaintingStyle.fill;
+
+      final Paint detailPaint = Paint()
+        ..color = Colors.white.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
+
+      final Paint shadowPaint = Paint()
+        ..color = Colors.black.withOpacity(0.2)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25 + 4, size * 0.1 + 4, size * 0.5, size * 0.8),
+          const Radius.circular(8),
+        ),
+        shadowPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
+          const Radius.circular(4),
+        ),
+        bodyPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
+          const Radius.circular(8),
+        ),
+        cabinPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.3, size * 0.15, size * 0.4, size * 0.1),
+          const Radius.circular(2),
+        ),
+        detailPaint,
+      );
+
+      final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (mounted && data != null) {
+        setState(() {
+          _laariIcon = BitmapDescriptor.bytes(data.buffer.asUint8List());
+        });
+      }
+    } catch (e) {
+      debugPrint("Error generating custom marker: $e");
     }
   }
 
@@ -558,13 +630,23 @@ class _HomeScreenState extends State<HomeScreen>
                   icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
                   infoWindow: InfoWindow(title: 'Destination', snippet: booking.dropAddress),
                 ),
+              if (booking.driverLocation != null)
+                Marker(
+                  markerId: const MarkerId('driver'),
+                  position: LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude),
+                  rotation: booking.driverHeading ?? 0.0,
+                  icon: _laariIcon,
+                  anchor: const Offset(0.5, 0.5),
+                  infoWindow: const InfoWindow(title: 'Lorry Location'),
+                  zIndex: 2,
+                ),
             },
             polylines: {
               if (_polylineCoordinates.isNotEmpty)
                 Polyline(
                   polylineId: const PolylineId('tracking_route'),
-                  color: AppColors.primary,
-                  width: 5,
+                  color: const Color(0xFF185A9D), // Same solid dark blue as Driver app
+                  width: 6,
                   points: _polylineCoordinates,
                   jointType: JointType.round,
                   startCap: Cap.roundCap,
@@ -657,13 +739,29 @@ class _HomeScreenState extends State<HomeScreen>
                         ],
                       ),
                     ),
-                    Text(
-                      'ID: ${booking.id.substring(0, 8)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.call, color: Colors.green, size: 20),
+                          onPressed: () async {
+                            final Uri url = Uri.parse('tel:+919876543210');
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url);
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'ID: ${booking.id.substring(0, 8)}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.textMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

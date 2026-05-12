@@ -14,6 +14,8 @@ class BookingModel {
   final String status;
   final DateTime createdAt;
   final String? driverId;
+  final GeoPoint? driverLocation;
+  final double? driverHeading;
 
   // We keep route/distance roughly as strings if needed, or just rely on pickup/drop
   final String route;
@@ -33,6 +35,8 @@ class BookingModel {
     required this.status,
     required this.createdAt,
     this.driverId,
+    this.driverLocation,
+    this.driverHeading,
     required this.route,
     required this.distance,
   });
@@ -53,6 +57,8 @@ class BookingModel {
       status: data['status'] ?? 'Pending',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       driverId: data['driverId'],
+      driverLocation: data['driverLocation'] as GeoPoint?,
+      driverHeading: (data['driverHeading'] as num?)?.toDouble(),
       route: data['route'] ?? 'Unknown Route',
       distance: data['distance'] ?? '',
     );

@@ -55,11 +55,13 @@ class OwnerMapState extends State<OwnerMap> {
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final GeoPoint? location = data['currentLocation'] as GeoPoint?;
+        final double heading = (data['heading'] as num?)?.toDouble() ?? 0.0;
         if (location != null) {
           newMarkers.add(
             Marker(
               markerId: MarkerId(doc.id),
               position: LatLng(location.latitude, location.longitude),
+              rotation: heading,
               icon: laariIcon,
               anchor: const Offset(0.5, 0.5),
               infoWindow: InfoWindow(title: data['name'] ?? "Driver"),
@@ -78,28 +80,86 @@ class OwnerMapState extends State<OwnerMap> {
 
   Future<void> _setCustomMarker() async {
     try {
-      final ByteData data = await rootBundle.load('assets/laari.png');
-      final Uint8List bytes = data.buffer.asUint8List();
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+      const double size = 150.0; // Slightly larger for detail
+      
+      // Paint for the truck body
+      final Paint bodyPaint = Paint()
+        ..color = const Color(0xFF185A9D) // Premium blue
+        ..style = PaintingStyle.fill;
 
-      final ui.Codec codec = await ui.instantiateImageCodec(
-        bytes,
-        targetWidth: 120,
-        targetHeight: 120,
+      // Paint for the cabin
+      final Paint cabinPaint = Paint()
+        ..color = const Color(0xFF2B5CB2)
+        ..style = PaintingStyle.fill;
+
+      // Paint for details (windows/highlights)
+      final Paint detailPaint = Paint()
+        ..color = Colors.white.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
+
+      // Shadow
+      final Paint shadowPaint = Paint()
+        ..color = Colors.black.withOpacity(0.2)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+      // Draw shadow
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25 + 4, size * 0.1 + 4, size * 0.5, size * 0.8),
+          const Radius.circular(8),
+        ),
+        shadowPaint,
       );
 
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      final ByteData? resizedData =
-          await frameInfo.image.toByteData(format: ui.ImageByteFormat.png);
+      // Draw Main Body (Back of the truck)
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
+          const Radius.circular(4),
+        ),
+        bodyPaint,
+      );
 
-      final Uint8List resizedBytes = resizedData!.buffer.asUint8List();
+      // Draw Cabin (Front of the truck)
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
+          const Radius.circular(8),
+        ),
+        cabinPaint,
+      );
 
-      if (mounted) {
+      // Windows
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size * 0.3, size * 0.15, size * 0.4, size * 0.1),
+          const Radius.circular(2),
+        ),
+        detailPaint,
+      );
+
+      // Highlights for 3D look
+      final Paint highlightPaint = Paint()
+        ..color = Colors.white.withOpacity(0.2)
+        ..style = PaintingStyle.fill;
+      
+      canvas.drawRect(
+        Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.1, size * 0.8),
+        highlightPaint,
+      );
+
+      final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (mounted && data != null) {
         setState(() {
-          laariIcon = BitmapDescriptor.bytes(resizedBytes);
+          laariIcon = BitmapDescriptor.bytes(data.buffer.asUint8List());
         });
       }
     } catch (e) {
-      debugPrint("Error loading custom marker: $e");
+      debugPrint("Error generating custom marker: $e");
     }
   }
 
