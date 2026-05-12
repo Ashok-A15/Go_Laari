@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen>
       const double size = 80.0;
       
       final Paint bodyPaint = Paint()
-        ..color = const Color(0xFFB0BEC5)
+        ..color = const Color(0xFFE53935)
         ..style = PaintingStyle.fill;
 
       final Paint cabinPaint = Paint()

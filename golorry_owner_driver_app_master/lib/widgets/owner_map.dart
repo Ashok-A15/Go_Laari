@@ -84,9 +84,9 @@ class OwnerMapState extends State<OwnerMap> {
       final Canvas canvas = Canvas(pictureRecorder);
       const double size = 80.0; // Much smaller size as requested
       
-      // Paint for the truck body (Silver/Grey)
+      // Paint for the truck body (Red)
       final Paint bodyPaint = Paint()
-        ..color = const Color(0xFFB0BEC5) 
+        ..color = const Color(0xFFE53935) 
         ..style = PaintingStyle.fill;
 
       // Paint for the cabin (White)
