@@ -22,6 +22,8 @@ class BookingModel {
   final String distance;
   final String? eta;
   final String? distanceRemaining;
+  final int? totalDistanceMeters;
+  final int? distanceRemainingMeters;
 
   BookingModel({
     required this.id,
@@ -43,6 +45,8 @@ class BookingModel {
     required this.distance,
     this.eta,
     this.distanceRemaining,
+    this.totalDistanceMeters,
+    this.distanceRemainingMeters,
   });
 
   factory BookingModel.fromFirestore(DocumentSnapshot doc) {
@@ -67,6 +71,8 @@ class BookingModel {
       distance: data['distance'] ?? '',
       eta: data['eta'],
       distanceRemaining: data['distanceRemaining'],
+      totalDistanceMeters: data['totalDistanceMeters'],
+      distanceRemainingMeters: data['distanceRemainingMeters'],
     );
   }
 
@@ -86,6 +92,8 @@ class BookingModel {
       'driverId': driverId,
       'route': route,
       'distance': distance,
+      'totalDistanceMeters': totalDistanceMeters,
+      'distanceRemainingMeters': distanceRemainingMeters,
     };
   }
 }

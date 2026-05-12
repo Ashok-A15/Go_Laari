@@ -51,6 +51,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   int _locationUpdateCount = 0;
   String _eta = '--';
   String _distanceRemaining = '--';
+  int? _distanceRemainingMeters;
   DateTime? _lastEtaUpdate;
 
   // ── Animation (pulsing marker) ────────────────────────────────────────
@@ -253,11 +254,11 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       _onNewPosition(pos);
     } catch (_) {}
 
-    // Then stream updates every ~4 seconds
+    // Then stream updates every ~2 seconds
     _locationSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // metres — updates when driver moves ≥5m
+        distanceFilter: 2, // Very frequent updates for Uber-like smoothness
       ),
     ).listen(_onNewPosition);
   }
@@ -269,7 +270,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       _driverLatLng = latLng;
       _routePoints.add(latLng);
 
-      // Moving driver marker (truck icon colour)
+      // Moving driver marker (truck icon)
       _markers
         ..removeWhere((m) => m.markerId.value == 'driver' || m.markerId.value == 'pickup' || m.markerId.value == 'drop')
         ..add(Marker(
@@ -317,8 +318,8 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         _polylines.add(Polyline(
           polylineId: const PolylineId('route_full'),
           points: _fullRoutePoints,
-          color: const Color(0xFF185A9D), // Same solid dark blue as Uber/Google
-          width: 6, // Thick solid line
+          color: const Color(0xFF185A9D), 
+          width: 6, 
           jointType: JointType.round,
           startCap: Cap.roundCap,
           endCap: Cap.roundCap,
@@ -338,7 +339,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     // Smoothly follow driver on map
     _mapController?.animateCamera(CameraUpdate.newLatLng(latLng));
 
-    // Update ETA and Distance every 1 minute or if it's the first time
+    // Update ETA and Distance every 1 minute
     if (_dropLatLng != null && (_lastEtaUpdate == null || DateTime.now().difference(_lastEtaUpdate!).inMinutes >= 1)) {
       _updateEta(latLng);
     }
@@ -353,6 +354,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
             pos.heading,
             eta: _eta,
             distanceRemaining: _distanceRemaining,
+            distanceRemainingMeters: _distanceRemainingMeters,
           )
           .catchError((e) => debugPrint('Location update failed: $e'));
     }
@@ -368,6 +370,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       setState(() {
         _eta = directions['duration'] ?? '--';
         _distanceRemaining = directions['distance'] ?? '--';
+        _distanceRemainingMeters = directions['distanceValue'];
         _lastEtaUpdate = DateTime.now();
       });
     }
@@ -657,39 +660,40 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
                           backgroundColor: Colors.green.withOpacity(0.1),
                           foregroundColor: Colors.green,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
                         ),
                         icon: const Icon(Icons.call, size: 18),
                         label: const Text('Call Customer'),
                         onPressed: () async {
-                          final Uri url = Uri.parse('tel:+919876543210'); // Placeholder phone number
+                          final Uri url = Uri.parse(
+                              'tel:+919876543210'); // Placeholder phone number
                           if (await canLaunchUrl(url)) {
                             await launchUrl(url);
                           }
                         },
                       ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹$_fare',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF185A9D),
-                              ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹$_fare',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF185A9D),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$_eta ($_distanceRemaining)',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey,
-                              ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$_eta ($_distanceRemaining)',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

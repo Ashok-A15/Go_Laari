@@ -11,6 +11,7 @@ class MoreDetailsScreen extends StatefulWidget {
   final double totalFare;
   final String distance;
   final String duration;
+  final int? totalDistanceMeters;
 
   const MoreDetailsScreen({
     super.key,
@@ -21,6 +22,7 @@ class MoreDetailsScreen extends StatefulWidget {
     required this.totalFare,
     required this.distance,
     required this.duration,
+    this.totalDistanceMeters,
   });
 
   @override
@@ -428,6 +430,7 @@ class _MoreDetailsScreenState extends State<MoreDetailsScreen> {
                             valueOfGoods: _valueOfGoods,
                             paymentMethod: _paymentMethod,
                             totalFare: widget.totalFare,
+                            totalDistanceMeters: widget.totalDistanceMeters,
                           ),
                         ),
                       ),

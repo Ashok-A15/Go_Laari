@@ -52,6 +52,9 @@ class _HomeScreenState extends State<HomeScreen>
   String? _lastBookingId;
   List<LatLng> _polylineCoordinates = [];
   BitmapDescriptor _laariIcon = BitmapDescriptor.defaultMarker;
+  LatLng? _lastDriverLatLng;
+  String? _lastStatus;
+  DateTime? _lastPolylineUpdate;
 
   // ── BOOKING WORKFLOW STATE ────────────────────
   bool _isSearching = false;
@@ -64,9 +67,12 @@ class _HomeScreenState extends State<HomeScreen>
   String? _activeField;
   bool _pickupFocused = false;
   bool _dropFocused = false;
+  int? _totalDistanceMeters;
   
   // ── OPTIMIZATION: CACHED STREAMS ────────────────
   late Stream<BookingModel?> _activeBookingStream;
+  StreamSubscription? _driversAroundSub;
+  Set<Marker> _driverMarkers = {};
 
   @override
   void initState() {
@@ -88,6 +94,36 @@ class _HomeScreenState extends State<HomeScreen>
     _activeBookingStream = BookingService().getActiveBooking().handleError((e) {
       debugPrint('Booking stream error: $e');
     });
+
+    _subscribeToDriversAround();
+  }
+
+  void _subscribeToDriversAround() {
+    _driversAroundSub?.cancel();
+    _driversAroundSub = BookingService().getDriversAroundStream().listen((drivers) {
+      final Set<Marker> newMarkers = {};
+      for (var driver in drivers) {
+        final GeoPoint? location = driver['currentLocation'] as GeoPoint?;
+        final double heading = (driver['heading'] as num?)?.toDouble() ?? 0.0;
+        if (location != null) {
+          newMarkers.add(
+            Marker(
+              markerId: MarkerId('driver_${driver['id']}'),
+              position: LatLng(location.latitude, location.longitude),
+              rotation: heading,
+              icon: _laariIcon,
+              anchor: const Offset(0.5, 0.5),
+              infoWindow: InfoWindow(title: driver['name'] ?? "Lorry"),
+            ),
+          );
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _driverMarkers = newMarkers;
+        });
+      }
+    });
   }
 
   @override
@@ -95,6 +131,7 @@ class _HomeScreenState extends State<HomeScreen>
     _animController.dispose();
     _pickupController.dispose();
     _dropController.dispose();
+    _driversAroundSub?.cancel();
     super.dispose();
   }
 
@@ -291,6 +328,7 @@ class _HomeScreenState extends State<HomeScreen>
       double distanceKm = 0;
       if (directions != null) {
         distanceKm = (directions['distanceValue'] as int) / 1000.0;
+        _totalDistanceMeters = directions['distanceValue'] as int;
       }
       double calculatedFare = 500 + (distanceKm * 15);
 
@@ -308,6 +346,7 @@ class _HomeScreenState extends State<HomeScreen>
               totalFare: calculatedFare,
               distance: directions?['distance'] ?? 'Calculating...',
               duration: directions?['duration'] ?? 'Calculating...',
+              totalDistanceMeters: _totalDistanceMeters,
             ),
           ),
         );
@@ -482,6 +521,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   myLocationEnabled: true,
                   myLocationButtonEnabled: false,
+                  markers: _markers.union(_driverMarkers),
+                  polylines: _polylines,
                   onMapCreated: (c) => _mapController = c,
                 ),
               ),
@@ -557,8 +598,8 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Future<void> _getPolyline(BookingModel booking) async {
-    if (_lastBookingId == booking.id && _polylineCoordinates.isNotEmpty) return;
+  Future<void> _getPolyline(BookingModel booking, {bool forceRefresh = false}) async {
+    if (!forceRefresh && _lastBookingId == booking.id && _polylineCoordinates.isNotEmpty) return;
     
     _lastBookingId = booking.id;
     final geo = GeocodingService(_apiKey);
@@ -573,7 +614,11 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
 
-      final directions = await geo.getDirections(booking.pickupAddress, booking.dropAddress);
+      final directions = (booking.driverLocation != null)
+          ? await geo.getDirectionsFromLatLng(
+              LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude),
+              booking.status == 'accepted' ? pCoord : dCoord)
+          : await geo.getDirections(booking.pickupAddress, booking.dropAddress);
       
       if (mounted) {
         setState(() {
@@ -598,8 +643,26 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildActiveTrackingState(BookingModel booking) {
-    if (_lastBookingId != booking.id) {
+    if (_lastBookingId != booking.id || 
+        _lastStatus != booking.status || 
+        (_lastPolylineUpdate == null || DateTime.now().difference(_lastPolylineUpdate!).inSeconds > 30)) {
        _getPolyline(booking);
+       _lastStatus = booking.status;
+       _lastPolylineUpdate = DateTime.now();
+    }
+    
+    // Auto-follow driver
+    if (booking.driverLocation != null) {
+      final currentDriverPos = LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude);
+      if (_lastDriverLatLng == null || 
+          _lastDriverLatLng!.latitude != currentDriverPos.latitude || 
+          _lastDriverLatLng!.longitude != currentDriverPos.longitude) {
+        
+        _lastDriverLatLng = currentDriverPos;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _mapController?.animateCamera(CameraUpdate.newLatLng(currentDriverPos));
+        });
+      }
     }
     
     final isDark = AppColors.isDark;
@@ -685,7 +748,23 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(height: 12),
               _mapActionBtn(
                 icon: Icons.my_location_rounded,
-                onTap: () {},
+                onTap: () {
+                   if (booking.driverLocation != null) {
+                     _mapController?.animateCamera(CameraUpdate.newLatLng(
+                       LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude)
+                     ));
+                   }
+                },
+              ),
+              const SizedBox(height: 12),
+              _mapActionBtn(
+                icon: Icons.refresh_rounded,
+                onTap: () {
+                  _getPolyline(booking, forceRefresh: true);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Refreshing live tracking...'), duration: Duration(seconds: 1))
+                  );
+                },
               ),
             ],
           ),
@@ -729,9 +808,9 @@ class _HomeScreenState extends State<HomeScreen>
                           const Icon(Icons.person_pin_circle_rounded, size: 12, color: Color(0xFF00D4AA)),
                           const SizedBox(width: 4),
                           Text(
-                            booking.eta != null 
-                              ? 'Arriving in ${booking.eta}' 
-                              : 'Driver Connected',
+                            booking.status == 'accepted' 
+                              ? (booking.eta != null ? 'Arriving in ${booking.eta}' : 'Driver is coming')
+                              : (booking.status == 'in_transit' ? 'Heading to destination' : 'Driver Connected'),
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -780,11 +859,45 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Driver is heading to destination',
+                  booking.status == 'accepted' ? 'Driver is heading to pickup' : 'Driver is heading to destination',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: AppColors.textSecondary,
                   ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Journey Progress Bar
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Trip Progress', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                        Text(
+                          booking.status == 'accepted' ? 'To Pickup' : 'To Destination',
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: () {
+                          if (booking.totalDistanceMeters == null || booking.distanceRemainingMeters == null) {
+                            return booking.status == 'in_transit' ? 0.5 : 0.2;
+                          }
+                          double progress = 1.0 - (booking.distanceRemainingMeters! / booking.totalDistanceMeters!);
+                          return progress.clamp(0.0, 1.0);
+                        }(),
+                        backgroundColor: AppColors.border,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                        minHeight: 8,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -941,6 +1054,10 @@ class _HomeScreenState extends State<HomeScreen>
                       hint: 'Pickup Location',
                       icon: Icons.my_location_rounded,
                       iconColor: AppColors.primary,
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.gps_fixed_rounded, size: 18, color: AppColors.primary),
+                        onPressed: _determinePosition,
+                      ),
                       onChanged: (v) => _fetchSuggestions(v, true),
                       onFocusChange: (f) => setState(() => _pickupFocused = f),
                     ),
@@ -1027,6 +1144,7 @@ class _HomeScreenState extends State<HomeScreen>
     required Color iconColor,
     required Function(String) onChanged,
     required Function(bool) onFocusChange,
+    Widget? suffixIcon,
   }) {
     return Focus(
       onFocusChange: onFocusChange,
@@ -1037,6 +1155,7 @@ class _HomeScreenState extends State<HomeScreen>
         decoration: InputDecoration(
           hintText: hint,
           prefixIcon: Icon(icon, color: iconColor, size: 20),
+          suffixIcon: suffixIcon,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),

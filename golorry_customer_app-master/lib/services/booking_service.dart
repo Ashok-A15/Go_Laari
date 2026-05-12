@@ -93,4 +93,10 @@ class BookingService {
       return null;
     });
   }
+
+  /// Live stream of all available drivers.
+  Stream<List<Map<String, dynamic>>> getDriversAroundStream() {
+    return _db.collection('drivers').where('status', isEqualTo: 'active').snapshots().map((snap) =>
+        snap.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList());
+  }
 }

@@ -21,6 +21,7 @@ class TrackingScreen extends StatefulWidget {
   final String valueOfGoods;
   final String paymentMethod;
   final double totalFare;
+  final int? totalDistanceMeters;
 
   const TrackingScreen({
     super.key,
@@ -32,6 +33,7 @@ class TrackingScreen extends StatefulWidget {
     required this.valueOfGoods,
     required this.paymentMethod,
     required this.totalFare,
+    this.totalDistanceMeters,
   });
 
   @override
@@ -184,6 +186,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         distance: '${(_distanceKm ?? 8.5).toStringAsFixed(1)} km • ${(_durationMin ?? 25).toStringAsFixed(0)} min',
         status: 'pending',
         createdAt: DateTime.now(),
+        totalDistanceMeters: widget.totalDistanceMeters,
       );
       await BookingService().createBooking(booking);
       if (mounted) {

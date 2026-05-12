@@ -73,22 +73,13 @@ class BackgroundService {
       bookingId = event?['bookingId'];
     });
 
-    Timer.periodic(const Duration(seconds: 10), (timer) async {
+    Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (service is AndroidServiceInstance) {
         if (await service.isForegroundService()) {
           // Update notification with current status
-          flutterLocalNotificationsPlugin.show(
-            notificationId,
-            'GoLorry Live',
-            'Trip in progress - Syncing location...',
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                notificationChannelId,
-                'GoLorry Tracking',
-                ongoing: true,
-                icon: 'ic_bg_service_small',
-              ),
-            ),
+          service.setForegroundNotificationInfo(
+            title: 'GoLorry Live',
+            content: 'Trip in progress - Syncing location...',
           );
         }
       }

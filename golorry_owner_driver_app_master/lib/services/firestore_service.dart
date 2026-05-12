@@ -81,6 +81,7 @@ class FirestoreService {
       ...data,
       'createdAt': FieldValue.serverTimestamp(),
       'role': 'driver',
+      'status': 'active',
     });
   }
 
@@ -245,7 +246,15 @@ class FirestoreService {
   }
 
   // Update driver live GPS location inside the active booking (for customer tracking)
-  Future<void> updateBookingLocation(String bookingId, double lat, double lng, [double heading = 0.0, {String? eta, String? distanceRemaining}]) async {
+  Future<void> updateBookingLocation(
+    String bookingId, 
+    double lat, 
+    double lng, 
+    double heading, {
+    String? eta, 
+    String? distanceRemaining,
+    int? distanceRemainingMeters,
+  }) async {
     final Map<String, dynamic> data = {
       'driverLocation': GeoPoint(lat, lng),
       'driverHeading': heading,
@@ -254,6 +263,7 @@ class FirestoreService {
     
     if (eta != null) data['eta'] = eta;
     if (distanceRemaining != null) data['distanceRemaining'] = distanceRemaining;
+    if (distanceRemainingMeters != null) data['distanceRemainingMeters'] = distanceRemainingMeters;
 
     await _db.collection('bookings').doc(bookingId).update(data);
     // Also update the driver document so owner map shows it
