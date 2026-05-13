@@ -38,4 +38,12 @@ class MarkerHelper {
 
     return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
   }
+
+  static Future<BitmapDescriptor> getTruckMarker() async {
+    return getCustomMarker(Icons.local_shipping_rounded, const Color(0xFF00D4AA));
+  }
+
+  static Future<BitmapDescriptor> getStationaryMarker(IconData icon, Color color) async {
+    return getCustomMarker(icon, color);
+  }
 }
