@@ -418,8 +418,7 @@ class _MoreDetailsScreenState extends State<MoreDetailsScreen> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.push(
-                        context,
+                      onPressed: () => Navigator.of(context, rootNavigator: true).push(
                         MaterialPageRoute(
                           builder: (_) => TrackingScreen(
                             pickupAddress: widget.pickupAddress,

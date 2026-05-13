@@ -18,6 +18,7 @@ import 'package:golorry_customer_app/screens/tracking_screen.dart';
 import 'package:golorry_customer_app/screens/more_details_screen.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:golorry_customer_app/screens/dashboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -316,6 +317,9 @@ class _HomeScreenState extends State<HomeScreen>
     final drop = _dropController.text.trim();
     if (pickup.isEmpty || drop.isEmpty) return;
 
+    // Reset search state so the home screen shows correctly when user returns
+    setState(() => _isSearching = false);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -335,8 +339,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) Navigator.pop(context);
 
       if (mounted) {
-        Navigator.push(
-          context,
+        await Navigator.of(context, rootNavigator: true).push(
           MaterialPageRoute(
             builder: (_) => MoreDetailsScreen(
               pickupAddress: pickup,
@@ -350,9 +353,12 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         );
+        // Ensure search state is reset when returning from booking
+        if (mounted) setState(() => _isSearching = false);
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
+      if (mounted) setState(() => _isSearching = false);
     }
   }
 
@@ -493,8 +499,10 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDark;
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: _buildDrawer(context),
       body: StreamBuilder<BookingModel?>(
         stream: _activeBookingStream,
         builder: (context, snapshot) {
@@ -515,6 +523,7 @@ class _HomeScreenState extends State<HomeScreen>
               // ── BACKGROUND MAP ───────────────────────────
               Positioned.fill(
                 child: GoogleMap(
+                  mapType: _currentMapType,
                   initialCameraPosition: CameraPosition(
                     target: _currentPosition ?? const LatLng(12.9716, 77.5946),
                     zoom: _currentPosition == null ? 10 : 15,
@@ -545,8 +554,69 @@ class _HomeScreenState extends State<HomeScreen>
                   child: _buildHeader(),
                 ),
 
+              // ── MAP ACTION BUTTONS (BOTTOM RIGHT) ─────────
+              if (!_isSearching && !_isLocatingOnMap)
+                Positioned(
+                  bottom: 180,
+                  right: 20,
+                  child: Column(
+                    children: [
+                      _mapActionBtn(
+                        icon: _currentMapType == MapType.normal
+                            ? Icons.layers_rounded
+                            : Icons.map_rounded,
+                        onTap: () {
+                          setState(() {
+                            _currentMapType = _currentMapType == MapType.normal
+                                ? MapType.satellite
+                                : MapType.normal;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _mapActionBtn(
+                        icon: Icons.my_location_rounded,
+                        onTap: _goToCurrentLocation,
+                      ),
+                      const SizedBox(height: 12),
+                      _mapActionBtn(
+                        icon: Icons.refresh_rounded,
+                        onTap: () {
+                          _loadData();
+                          _determinePosition();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
 
-              // ── SEARCH INTERFACE (BOTTOM) ──────────────────
+              // ── MENU BUTTON ─────────────────────────────
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 10,
+                left: 16,
+                child: Builder(
+                  builder: (context) => GestureDetector(
+                    onTap: () => Scaffold.of(context).openDrawer(),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E2028) : Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(Icons.menu_rounded, color: AppColors.textPrimary, size: 24),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── FLOATING LOCATION PILL ──────────────────
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 400),
                 curve: Curves.easeInOut,
@@ -1191,11 +1261,11 @@ class _HomeScreenState extends State<HomeScreen>
           clipper: _HeaderClipper(),
           child: Container(
             height: 190,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF0F3460), Color(0xFF16213E)],
+                colors: [const Color(0xFF26C6B0), const Color(0xFF2DD4BF)],
               ),
             ),
           ),
@@ -1285,9 +1355,127 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildDrawer(BuildContext context) {
+    final isDark = AppColors.isDark;
+    return Drawer(
+      backgroundColor: isDark ? const Color(0xFF11131A) : Colors.white,
+      width: MediaQuery.of(context).size.width * 0.75,
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 20, left: 24, bottom: 24, right: 24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark 
+                  ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                  : [const Color(0xFF26C6B0), const Color(0xFF2DD4BF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary),
+                  child: const CircleAvatar(radius: 28, backgroundColor: Colors.white, child: Icon(Icons.person, color: AppColors.primary, size: 35)),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Welcome!', style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.8))),
+                      Text(_userName, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              children: [
+                _drawerTile(Icons.home_rounded, 'Home', () => Navigator.pop(context)),
+                _drawerTile(Icons.person_rounded, 'Profile', () {
+                  Navigator.pop(context);
+                  DashboardScreen.tabNotifier.value = 2; // Profile index
+                }),
+                _drawerTile(Icons.notifications_rounded, 'Notifications', () => _showDrawerContent(context, 'Notifications', 'Stay updated with real-time transit alerts, driver assignments, and exclusive logistics offers.')),
+                const Divider(indent: 20, endIndent: 20, height: 32),
+                _drawerTile(Icons.headset_mic_rounded, 'Support', () => _showDrawerContent(context, 'Support', 'Contact our 24/7 dedicated logistics support team for assistance with your current or past shipments.')),
+                _drawerTile(Icons.help_center_rounded, 'FAQ', () => _showDrawerContent(context, 'FAQ', 'Find quick answers to common questions about lorry types, pricing, and our delivery network.')),
+                _drawerTile(Icons.info_rounded, 'About US', () => _showDrawerContent(context, 'About US', 'GoLorry is your premium logistics partner, connecting businesses with reliable transport solutions.')),
+                _drawerTile(Icons.policy_rounded, 'Policy info', () => _showDrawerContent(context, 'Policies', 'Review our terms of service, privacy policy, and logistics safety guidelines.')),
+                _drawerTile(Icons.share_rounded, 'Invite Friends', () => _showDrawerContent(context, 'Refer & Earn', 'Invite your friends to GoLorry and get 10% off on your next high-capacity shipment!')),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              children: [
+                Text('GoLorry v1.0.0', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text('Premium Logistics Partner', style: GoogleFonts.inter(fontSize: 10, color: AppColors.textMuted.withOpacity(0.5))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerTile(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      leading: Icon(icon, color: AppColors.primary, size: 22),
+      title: Text(title, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+    );
+  }
+
   String _firstName(String name) {
     final parts = name.trim().split(' ');
     return parts.isNotEmpty && parts[0].isNotEmpty ? parts[0] : 'there';
+  }
+
+  void _showDrawerContent(BuildContext context, String title, String content) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.isDark ? const Color(0xFF1E2028) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 24),
+            Text(title, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: 12),
+            Text(content, style: GoogleFonts.inter(fontSize: 15, color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: Text('Got it', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
   }
 }
 

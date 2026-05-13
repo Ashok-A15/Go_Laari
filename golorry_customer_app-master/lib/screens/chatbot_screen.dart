@@ -311,53 +311,55 @@ class _ChatbotScreenState extends State<ChatbotScreen> with TickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    // Premium Dark Navy + Teal Theme
-    final bgColor = const Color(0xFF0F172A); // Dark Navy
-    final tealGlow = const Color(0xFF2DD4BF); // Teal
+    final tealGlow = const Color(0xFF2DD4BF);
     
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: Stack(
-        children: [
-          // ── BACKGROUND GLOWS ───────────────────────
-          Positioned(
-            top: -100,
-            right: -50,
-            child: _GlowCircle(color: tealGlow.withValues(alpha: 0.15), size: 300),
-          ),
-          Positioned(
-            bottom: 100,
-            left: -100,
-            child: _GlowCircle(color: const Color(0xFF3B82F6).withValues(alpha: 0.1), size: 400),
-          ),
-
-          SafeArea(
-            child: Column(
-              children: [
-                // ── TOP HEADER ────────────────────────
-                _buildHeader(tealGlow),
-
-                // ── CHAT AREA ─────────────────────────
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 140),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) => _buildMessage(_messages[index], tealGlow),
-                  ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppColors.themeNotifier,
+      builder: (context, mode, child) {
+        final isDarkMode = AppColors.isDark;
+        final bg = AppColors.background;
+        return Scaffold(
+          backgroundColor: bg,
+          body: Stack(
+            children: [
+              if (isDarkMode) ...[
+                Positioned(
+                  top: -100,
+                  right: -50,
+                  child: _GlowCircle(color: tealGlow.withValues(alpha: 0.15), size: 300),
+                ),
+                Positioned(
+                  bottom: 100,
+                  left: -100,
+                  child: _GlowCircle(color: const Color(0xFF3B82F6).withValues(alpha: 0.1), size: 400),
                 ),
               ],
-            ),
-          ),
 
-          // ── FLOATING INPUT BAR ─────────────────────
-          _buildInputBar(tealGlow),
-        ],
-      ),
+              SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(tealGlow, isDarkMode),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 140),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) => _buildMessage(_messages[index], tealGlow, isDarkMode),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              _buildInputBar(tealGlow, isDarkMode),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader(Color teal) {
+  Widget _buildHeader(Color teal, bool isDark) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
       child: Row(
@@ -368,14 +370,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> with TickerProviderStateM
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 28),
+                    Icon(Icons.smart_toy_rounded, color: isDark ? Colors.white : AppColors.primary, size: 28),
                     const SizedBox(width: 10),
                     Text(
                       'GoLorry AI',
                       style: GoogleFonts.outfit(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -384,15 +386,13 @@ class _ChatbotScreenState extends State<ChatbotScreen> with TickerProviderStateM
                   'Your Smart Logistics Assistant',
                   style: GoogleFonts.inter(
                     fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: isDark ? Colors.white.withValues(alpha: 0.6) : AppColors.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-          
-          // AI ORB AVATAR
           Stack(
             alignment: Alignment.center,
             children: [
@@ -418,7 +418,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with TickerProviderStateM
                   );
                 },
               ),
-              const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 24),
+              Icon(Icons.auto_awesome_rounded, color: isDark ? Colors.white : AppColors.primary, size: 24),
             ],
           ),
         ],
@@ -427,8 +427,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> with TickerProviderStateM
   }
 
 
-  Widget _buildMessage(Map<String, dynamic> msg, Color teal) {
+  Widget _buildMessage(Map<String, dynamic> msg, Color teal, bool isDark) {
     final isUser = msg['role'] == 'user';
+    final bubbleBg = isUser
+        ? teal.withValues(alpha: 0.9)
+        : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white);
+    final textColor = isUser ? Colors.white : (isDark ? Colors.white : AppColors.textPrimary);
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Row(
@@ -448,161 +452,173 @@ class _ChatbotScreenState extends State<ChatbotScreen> with TickerProviderStateM
             ),
             const SizedBox(width: 12),
           ],
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                                decoration: BoxDecoration(
-                                  color: isUser ? teal.withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(20),
-                                    topRight: const Radius.circular(20),
-                                    bottomLeft: Radius.circular(isUser ? 20 : 4),
-                                    bottomRight: Radius.circular(isUser ? 4 : 20),
-                                  ),
-                                  border: Border.all(
-                                    color: isUser ? teal.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.1),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  child: Column(
-                                    crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        msg['content'],
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          color: Colors.white,
-                                          height: 1.4,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      if (msg['imagePath'] != null)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 8.0),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: Image.file(
-                                              File(msg['imagePath']),
-                                              height: 150,
-                                              width: 200,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
-                                        ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        msg['time'],
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10,
-                                          color: Colors.white.withValues(alpha: 0.5),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            if (!isUser && msg['options'] != null) ...[
-                              const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: (msg['options'] as List<String>).map((opt) {
-                                  return GestureDetector(
-                                    onTap: () => _onOptionSelected(opt),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: teal.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: teal.withValues(alpha: 0.3)),
-                                      ),
-                                      child: Text(
-                                        opt,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          color: teal,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ],
-                          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: bubbleBg,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: Radius.circular(isUser ? 20 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 20),
+                    ),
+                    border: Border.all(
+                      color: isUser 
+                        ? teal.withValues(alpha: 0.5) 
+                        : (isDark ? Colors.white.withValues(alpha: 0.15) : AppColors.border.withValues(alpha: 0.5)),
+                      width: 1,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          msg['content'],
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: textColor,
+                            height: 1.4,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
+                        if (msg['imagePath'] != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(msg['imagePath']),
+                                height: 150,
+                                width: 200,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          msg['time'],
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (!isUser && msg['options'] != null) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: (msg['options'] as List<String>).map((opt) {
+                      return GestureDetector(
+                        onTap: () => _onOptionSelected(opt),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: teal.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: teal.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            opt,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: teal,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
           if (isUser) const SizedBox(width: 44),
         ],
       ),
     );
   }
 
-  Widget _buildInputBar(Color teal) {
+  Widget _buildInputBar(Color teal, bool isDark) {
     return Positioned(
-      bottom: 110, // Increased to sit above the main Dashboard navigation dock
+      bottom: 110,
       left: 20,
       right: 20,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B).withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 25, offset: const Offset(0, 12))
-              ],
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.add_circle_outline_rounded, 
-                    color: Colors.white.withValues(alpha: 0.6)),
-                  onPressed: _pickImage,
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: _isListening ? 'Listening...' : 'Ask anything about your shipment...',
-                      hintStyle: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.4), fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                    ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(_isListening ? Icons.mic_rounded : Icons.mic_none_rounded, 
-                    color: _isListening ? teal : Colors.white.withValues(alpha: 0.6)),
-                  onPressed: _toggleListening,
-                ),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: _sendMessage,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: teal,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: teal.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 2)
-                      ],
-                    ),
-                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                  ),
-                ),
-              ],
-            ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF1E293B).withValues(alpha: 0.95)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: isDark ? Colors.white.withValues(alpha: 0.15) : AppColors.border,
+            width: 1,
           ),
-        ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.add_circle_outline_rounded,
+                  color: isDark ? Colors.white.withValues(alpha: 0.7) : AppColors.textMuted),
+              onPressed: _pickImage,
+            ),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                style: GoogleFonts.inter(color: isDark ? Colors.white : AppColors.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: _isListening ? 'Listening...' : 'Ask anything about your shipment...',
+                  hintStyle: GoogleFonts.inter(
+                    color: isDark ? Colors.white.withValues(alpha: 0.4) : AppColors.textMuted,
+                    fontSize: 13,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                color: _isListening ? teal : (isDark ? Colors.white.withValues(alpha: 0.7) : AppColors.textMuted),
+              ),
+              onPressed: _toggleListening,
+            ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: _sendMessage,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: teal,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: teal.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 2)
+                  ],
+                ),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

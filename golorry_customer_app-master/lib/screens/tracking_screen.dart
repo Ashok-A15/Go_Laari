@@ -194,48 +194,53 @@ class _TrackingScreenState extends State<TrackingScreen>
           context: context,
           barrierDismissible: false,
           builder: (ctx) => Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 40),
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Lottie.network(
-                    'https://lottie.host/17b9c9df-1510-476c-843c-62c1d0637172/u9Zp5N0T8F.json',
-                    height: 120,
-                    repeat: false,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Booking Confirmed!',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 40),
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Lottie.network(
+                      'https://lottie.host/17b9c9df-1510-476c-843c-62c1d0637172/u9Zp5N0T8F.json',
+                      height: 120,
+                      repeat: false,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Connecting you with your driver...',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: AppColors.textMuted,
+                    const SizedBox(height: 16),
+                    Text(
+                      'Booking Confirmed!',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'Connecting you with your driver...',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         );
 
         // Wait a bit to show the animation, then go home
-        await Future.delayed(const Duration(milliseconds: 2000));
-        if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (mounted) {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
       }
     } catch (e) {
       debugPrint('Booking creation failed: $e');
@@ -257,7 +262,7 @@ class _TrackingScreenState extends State<TrackingScreen>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
+      appBar: _confirming ? null : AppBar(
         title: Text('Booking Summary', // Changed to Summary/Report feel
             style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         backgroundColor: AppColors.surface,
@@ -268,10 +273,12 @@ class _TrackingScreenState extends State<TrackingScreen>
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Container(
-        color: isDark ? const Color(0xFF1B1E26) : const Color(0xFFF8FAFC),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+      body: _confirming 
+        ? Container(color: isDark ? const Color(0xFF1B1E26) : const Color(0xFFF8FAFC))
+        : Container(
+            color: isDark ? const Color(0xFF1B1E26) : const Color(0xFFF8FAFC),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

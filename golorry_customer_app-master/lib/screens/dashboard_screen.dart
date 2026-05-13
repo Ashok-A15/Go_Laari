@@ -10,6 +10,8 @@ import 'package:golorry_customer_app/screens/profile_screen.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
+  static final ValueNotifier<int> tabNotifier = ValueNotifier(0);
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -19,7 +21,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _pageController = PageController();
 
   @override
+  void initState() {
+    super.initState();
+    DashboardScreen.tabNotifier.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (mounted) {
+      setState(() => _currentIndex = DashboardScreen.tabNotifier.value);
+      _pageController.jumpToPage(DashboardScreen.tabNotifier.value);
+    }
+  }
+
+  @override
   void dispose() {
+    DashboardScreen.tabNotifier.removeListener(_onTabChanged);
     _pageController.dispose();
     super.dispose();
   }
@@ -43,8 +59,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: const [
                   HomeScreen(),
                   LiveScreen(),
-                  ChatbotScreen(),
                   ProfileScreen(),
+                  ChatbotScreen(),
                 ],
               ),
 
@@ -76,8 +92,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           _navItem(0, Icons.grid_view_rounded, 'Home', isDark),
                           _navItem(1, Icons.local_shipping_rounded, 'Orders', isDark),
-                          _navItem(2, Icons.auto_awesome_rounded, 'AI Assistant', isDark),
-                          _navItem(3, Icons.settings_suggest_rounded, 'Settings', isDark),
+                          _navItem(2, Icons.person_outline_rounded, 'Profile', isDark),
+                          _navItem(3, Icons.auto_awesome_rounded, 'AI Assistant', isDark),
                         ],
                       ),
                     ),

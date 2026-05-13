@@ -10,97 +10,81 @@ class AuthScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.authBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
               const Spacer(flex: 2),
-
-              // ── Logo ───────────────────────────────────────
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.primary.withOpacity(0.35),
-                    width: 2,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.local_shipping_rounded,
-                  size: 52,
-                  color: AppColors.primary,
-                ),
+              
+              // ── Truck Icon ──────────────────────────────────
+              const Icon(
+                Icons.local_shipping_rounded,
+                size: 110,
+                color: Colors.white,
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
 
               Text(
-                'GoLorry',
-                style: GoogleFonts.inter(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                'Welcome to GoLorry',
+                style: GoogleFonts.outfit(
+                  fontSize: 38,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
                   letterSpacing: -0.5,
                 ),
               ),
 
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
 
               Text(
-                'Choose how you\'d like to continue',
+                'Select your path to continue',
                 style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
+                  fontSize: 16,
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
 
-              const Spacer(flex: 2),
+              const Spacer(flex: 3),
 
               // ── Login Button ────────────────────────────────
               _authOption(
                 context,
                 icon: Icons.login_rounded,
-                iconBg: AppColors.primary.withOpacity(0.12),
-                iconColor: AppColors.primary,
                 title: 'Login',
-                subtitle: 'Sign in to your existing account',
+                subtitle: 'Sign in to your account',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                 ),
-                borderColor: AppColors.primary.withOpacity(0.3),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // ── Sign Up Button ──────────────────────────────
               _authOption(
                 context,
                 icon: Icons.person_add_rounded,
-                iconBg: AppColors.secondary.withOpacity(0.12),
-                iconColor: AppColors.secondary,
                 title: 'Sign Up',
-                subtitle: 'Create a new GoLorry account',
+                subtitle: 'Join the GoLorry family',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SignupScreen()),
                 ),
-                borderColor: AppColors.secondary.withOpacity(0.3),
               ),
 
-              const Spacer(flex: 2),
+              const Spacer(flex: 3),
 
               Text(
                 'By continuing, you agree to our Terms & Privacy Policy',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
 
@@ -115,59 +99,58 @@ class AuthScreen extends StatelessWidget {
   Widget _authOption(
     BuildContext context, {
     required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    required Color borderColor,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: borderColor, width: 1),
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
         ),
         child: Row(
           children: [
             Container(
-              width: 52,
-              height: 52,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(14),
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: iconColor, size: 26),
+              child: Icon(icon, color: Colors.white, size: 28),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.inter(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                    style: GoogleFonts.outfit(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     subtitle,
                     style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      color: Colors.white.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded,
-                color: AppColors.textMuted, size: 22),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white.withValues(alpha: 0.5),
+              size: 24,
+            ),
           ],
         ),
       ),

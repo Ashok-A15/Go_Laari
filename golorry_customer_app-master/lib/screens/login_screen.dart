@@ -21,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   String? _error;
 
-  /// Maps Firebase Auth error codes to clean user-facing messages.
   String _friendlyAuthError(FirebaseAuthException e) {
     switch (e.code) {
       case 'network-request-failed':
@@ -30,12 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
       case 'wrong-password':
       case 'invalid-credential':
         return 'Incorrect email or password. Please try again.';
-      case 'invalid-email':
-        return 'The email address is not valid.';
-      case 'user-disabled':
-        return 'This account has been disabled. Please contact support.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please wait a moment and try again.';
       default:
         return 'Login failed. Please try again.';
     }
@@ -73,235 +66,151 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine if we should use dark or light styles for inner card
-    final isDark = AppColors.isDark;
-
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Back Button (Align left)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
+      backgroundColor: AppColors.authBackground,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
               ),
-              
-              const SizedBox(height: 20),
+            ),
+            
+            const Spacer(flex: 1),
 
-              // ── Header (Truck Icon + Text matching the image) ──────────────────
-              const Icon(
-                Icons.local_shipping_rounded,
-                size: 80,
+            // ── Header ─────────────────────────────────────
+            const Icon(
+              Icons.local_shipping_rounded,
+              size: 100,
+              color: Colors.white,
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Welcome to GoLorry',
+              style: GoogleFonts.outfit(
+                fontSize: 36,
+                fontWeight: FontWeight.w900,
                 color: Colors.white,
+                letterSpacing: -0.5,
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Welcome to GoLorry',
-                style: GoogleFonts.inter(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
-                ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Log in as Customer to continue',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.8),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Log in as Customer to continue',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
+            ),
+
+            const SizedBox(height: 48),
+
+            // ── Dark Card Form ──────────────────────────────
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: const Color(0xFF11131A), // Dark Navy/Black
+                borderRadius: BorderRadius.circular(40),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  )
+                ],
               ),
-
-              const SizedBox(height: 40),
-
-              // ── White Card Form ────────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 24),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(32),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
-                        ),
-                        child: Column(
-                          children: [
-                            // Email
-                            _buildTextField(
-                              controller: _emailController,
-                              icon: Icons.email_outlined,
-                              hint: 'Email Address',
-                              isDark: isDark,
-                            ),
-                            
-                            const SizedBox(height: 16),
-
-                            // Password
-                            _buildTextField(
-                              controller: _passwordController,
-                              icon: Icons.lock_outline_rounded,
-                              hint: 'Password',
-                              isPassword: true,
-                              obscureText: _obscurePassword,
-                              onVisibilityToggle: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
-                              },
-                              isDark: isDark,
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Forgot Password Link
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                'Forgot Password?',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-
-                            // Error Message
-                            if (_error != null) ...[
-                              const SizedBox(height: 16),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.error.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(
-                                      (_error!.contains('internet') || _error!.contains('network'))
-                                          ? Icons.wifi_off_rounded
-                                          : Icons.error_outline_rounded,
-                                      size: 16,
-                                      color: AppColors.error,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _error!,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 13,
-                                          color: AppColors.error,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ),
-                                    if (_error!.contains('internet') || _error!.contains('network'))
-                                      GestureDetector(
-                                        onTap: _login,
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(left: 8),
-                                          child: Text(
-                                            'Retry',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.error,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-
-                            const SizedBox(height: 24),
-
-                            // Login Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 54,
-                              child: ElevatedButton(
-                                onPressed: _loading ? null : _login,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1D4ED8), // Navy Blue matching driver app
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: _loading
-                                    ? const SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.5,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Text(
-                                        'Login',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 32),
-
-                      // Sign Up text at bottom
-                      GestureDetector(
-                        onTap: () => Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SignupScreen()),
-                        ),
-                        child: RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                            children: [
-                              const TextSpan(text: "Don't have an account? "),
-                              TextSpan(
-                                text: 'Sign Up',
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+              child: Column(
+                children: [
+                  _buildTextField(
+                    controller: _emailController,
+                    icon: Icons.email_outlined,
+                    hint: 'Email Address',
                   ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _passwordController,
+                    icon: Icons.lock_outline_rounded,
+                    hint: 'Password',
+                    isPassword: true,
+                    obscureText: _obscurePassword,
+                    onVisibilityToggle: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Forgot Password?',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 58,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _login,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB), // Blue Button
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _loading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : Text(
+                              'Login',
+                              style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            const Spacer(flex: 2),
+
+            GestureDetector(
+              onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const SignupScreen()),
+              ),
+              child: RichText(
+                text: TextSpan(
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                  children: [
+                    const TextSpan(text: "Don't have an account? "),
+                    TextSpan(
+                      text: 'Sign Up',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 32),
+          ],
         ),
       ),
     );
@@ -314,45 +223,31 @@ class _LoginScreenState extends State<LoginScreen> {
     bool isPassword = false,
     bool? obscureText,
     VoidCallback? onVisibilityToggle,
-    required bool isDark,
   }) {
-    final bgColor = Colors.white.withValues(alpha: 0.15);
-    final iconColor = Colors.white.withValues(alpha: 0.8);
-    const textColor = Colors.white;
-
     return Container(
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
+        color: const Color(0xFF1E2028),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: TextField(
         controller: controller,
         obscureText: obscureText ?? false,
-        style: GoogleFonts.inter(color: textColor, fontSize: 16, fontWeight: FontWeight.w500),
+        style: GoogleFonts.inter(color: Colors.white, fontSize: 16),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.5), fontSize: 16),
-          prefixIcon: Icon(icon, color: iconColor, size: 22),
+          hintStyle: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.3)),
+          prefixIcon: Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 22),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
-                    obscureText! ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: iconColor,
-                    size: 22,
+                    obscureText! ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    color: Colors.white.withValues(alpha: 0.5),
                   ),
                   onPressed: onVisibilityToggle,
                 )
               : null,
           border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.white, width: 1.5),
-          ),
-          filled: true,
-          fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.all(20),
         ),
       ),
     );

@@ -16,53 +16,51 @@ class AppColors {
 
   // ── Mutable Semantic Colors ──────────────────────────────
   // DARK defaults (initialised here, overwritten by _updateColors on light)
-  static Color background    = const Color(0xFF11131A);
-  static Color surface       = const Color(0xFF1A1D24);
-  static Color card          = const Color(0xFF1A1D24);
-  static Color cardElevated  = const Color(0xFF232731);
+  static Color background    = const Color(0xFF081120);
+  static Color surface       = const Color(0xFF0F172A);
+  static Color card          = const Color(0xFF0F172A);
+  static Color cardElevated  = const Color(0xFF161F2E);
 
   static Color textPrimary   = const Color(0xFFFFFFFF);
   static Color textSecondary = const Color(0xFF9CA3AF);
   static Color textMuted     = const Color(0xFF6B7280);
 
-  static Color border        = const Color(0xFF2A2E39);
-  static Color borderLight   = const Color(0xFF353945);
+  static Color border        = const Color(0xFF1E293B);
+  static Color borderLight   = const Color(0xFF2D3748);
 
   static void _updateColors() {
     if (isDark) {
       // ── DARK ────────────────────────────────────────────
-      background    = const Color(0xFF11131A);
-      surface       = const Color(0xFF1A1D24);
-      card          = const Color(0xFF1A1D24);
-      cardElevated  = const Color(0xFF232731);
+      background    = const Color(0xFF081120);
+      surface       = const Color(0xFF0F172A);
+      card          = const Color(0xFF0F172A);
+      cardElevated  = const Color(0xFF161F2E);
 
       textPrimary   = const Color(0xFFFFFFFF);
       textSecondary = const Color(0xFF9CA3AF);
       textMuted     = const Color(0xFF6B7280);
 
-      border        = const Color(0xFF2A2E39);
-      borderLight   = const Color(0xFF353945);
+      border        = const Color(0xFF1E293B);
+      borderLight   = const Color(0xFF2D3748);
     } else {
-      // ── LIGHT (Driver-app inspired palette) ─────────────
-      // Warm off-white backgrounds — not stark white
-      background    = const Color(0xFFF4F6F9);   // cool grey page bg
-      surface       = const Color(0xFFFFFFFF);   // pure white cards/bars
+      // ── LIGHT (Teal Brand Theme) ─────────────
+      background    = const Color(0xFFF8FAFC);   // Light gray background
+      surface       = const Color(0xFFFFFFFF);   // White for cards
       card          = const Color(0xFFFFFFFF);
-      cardElevated  = const Color(0xFFF0F2F5);
+      cardElevated  = const Color(0xFFF1F5F9);
 
-      // Rich dark text — not flat black
-      textPrimary   = const Color(0xFF1A1F2E);   // near-black navy
-      textSecondary = const Color(0xFF4B5563);   // medium slate
-      textMuted     = const Color(0xFF9CA3AF);   // light grey hint
+      textPrimary   = const Color(0xFF0F172A);   // Dark Slate-900
+      textSecondary = const Color(0xFF475569);   // Slate-600
+      textMuted     = const Color(0xFF94A3B8);   // Slate-400
 
-      // Subtle borders
-      border        = const Color(0xFFE2E8F0);   // slate-200
-      borderLight   = const Color(0xFFCBD5E1);   // slate-300
+      border        = const Color(0xFFE2E8F0);   // Slate-200
+      borderLight   = const Color(0xFFF1F5F9);   // Slate-100
     }
   }
 
   // ── Constant Brand Colors ────────────────────────────────
-  static const primary       = Color(0xFF00D4AA); // The Teal/Mint
+  static const primary       = Color(0xFF2DD4BF); // Vibrant Teal from images
+  static const authBackground = Color(0xFF2DD4BF); // The Teal bg
   static const primaryDark   = Color(0xFF1D4ED8); // The Deep Blue
   static const primaryLight  = Color(0xFF33DEBB); // Light Teal
 

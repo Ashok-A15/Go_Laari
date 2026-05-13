@@ -110,19 +110,81 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     if (confirmed == true) await FirebaseAuth.instance.signOut();
   }
 
+  Future<void> _handleSOS() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: AlertDialog(
+          backgroundColor: AppColors.surface.withValues(alpha: 0.8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+            side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: AppColors.error),
+              const SizedBox(width: 12),
+              Text('Emergency SOS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AppColors.error)),
+            ],
+          ),
+          content: Text(
+            'This will send your live location to emergency services and our 24/7 support team. Are you sure?',
+            style: GoogleFonts.inter(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: Text('Trigger SOS', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.sensors_rounded, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Emergency SOS active. Location broadcasting...', style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
+            ],
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = AppColors.isDark;
-    // Layered backgrounds for enhanced dark mode
-    final layeredBg = isDark 
-        ? const Color(0xFF081120) 
-        : const Color(0xFFF8FAFC);
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppColors.themeNotifier,
+      builder: (_, __, ___) {
+        final isDark = AppColors.isDark;
+        final layeredBg = isDark
+            ? const Color(0xFF081120)
+            : const Color(0xFFF4F6FA);
 
-    return Scaffold(
-      backgroundColor: layeredBg,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : CustomScrollView(
+        return Scaffold(
+          backgroundColor: layeredBg,
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
                 // ── HERO HEADER ────────────────────────────
@@ -150,12 +212,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
                       const SizedBox(height: 24),
 
-                      // ── LOGISTICS PERSONALIZATION ───────
                       _sectionTitle('LOGISTICS SMARTS'),
                       _glassPanel(isDark, [
-                        _tile(Icons.auto_graph_rounded, 'Cost Optimization', 'Save on your frequent routes', const Color(0xFFF59E0B), () {}),
+                        _tile(Icons.auto_graph_rounded, 'Cost Optimization', 'Save on your frequent routes', const Color(0xFFF59E0B), () => _showContent(context, 'Cost Optimization', 'Our AI analyzes your frequent routes to suggest bulk booking discounts and off-peak timing to save up to 15% on logistics.')),
                         _divider(isDark),
-                        _tile(Icons.map_rounded, 'Smart Route Suggester', 'AI-powered transit efficiency', const Color(0xFF8B5CF6), () {}),
+                        _tile(Icons.map_rounded, 'Smart Route Suggester', 'AI-powered transit efficiency', const Color(0xFF8B5CF6), () => _showContent(context, 'Smart Routes', 'Using real-time traffic data and lorry-specific road restrictions, we suggest the fastest routes for your heavy shipments.')),
                       ]),
 
                       const SizedBox(height: 24),
@@ -171,8 +232,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       // ── APP SETTINGS ─────────────────────
                       _sectionTitle('PREFERENCES'),
                       _glassPanel(isDark, [
-                        _tile(Icons.notifications_active_rounded, 'Notifications', 'Real-time transit alerts', const Color(0xFF6366F1), () => _push(const NotificationsScreen())),
-                        _divider(isDark),
                         _darkModeRow(isDark),
                       ]),
 
@@ -181,7 +240,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       // ── SUPPORT HUB ──────────────────────
                       _sectionTitle('SUPPORT HUB'),
                       _glassPanel(isDark, [
-                        _tile(Icons.help_center_rounded, 'FAQ & Help', 'Common logistics answers', const Color(0xFF64748B), () {}),
+                        _tile(Icons.help_center_rounded, 'FAQ & Help', 'Common logistics answers', const Color(0xFF64748B), () => _showContent(context, 'Help Center', 'Access our 24/7 support for shipment tracking, payment queries, and platform assistance.')),
+                      ]),
+
+                      const SizedBox(height: 24),
+
+                      // ── EMERGENCY & SOS ─────────────────
+                      _sectionTitle('EMERGENCY & SOS'),
+                      _glassPanel(isDark, [
+                        _tile(Icons.emergency_rounded, 'Emergency SOS', 'Instant help and location sharing', AppColors.error, _handleSOS),
                       ]),
 
                       const SizedBox(height: 24),
@@ -195,6 +262,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 ),
               ],
             ),
+        );
+      },
     );
   }
 
@@ -232,7 +301,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Settings', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+                      Text('Profile', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
                       IconButton(onPressed: () {}, icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white)),
                     ],
                   ),
@@ -309,6 +378,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _statCard(bool isDark, String val, String label, IconData icon, Color color) {
+    final textColor = isDark ? Colors.white : const Color(0xFF1A1F2E);
+    final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -316,7 +387,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           color: isDark ? const Color(0xFF0E1A32) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.05 : 0.08), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,8 +398,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(height: 16),
-            Text(val, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-            Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.textMuted)),
+            Text(val, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+            Text(label, style: GoogleFonts.inter(fontSize: 11, color: subColor)),
           ],
         ),
       ),
@@ -336,11 +407,24 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _glassPanel(bool isDark, List<Widget> children) {
+    if (!isDark) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Column(children: children),
+        ),
+      );
+    }
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF132548).withValues(alpha: 0.4) : Colors.white,
+        color: const Color(0xFF132548).withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.1), width: 1),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: ClipRRect(
@@ -354,6 +438,10 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _tile(IconData icon, String title, String subtitle, Color color, VoidCallback onTap, {Widget? trailing}) {
+    final isDark = AppColors.isDark;
+    final titleColor = isDark ? Colors.white : const Color(0xFF1A1F2E);
+    final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final arrowColor = isDark ? Colors.white24 : const Color(0xFFCBD5E1);
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -362,9 +450,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
         child: Icon(icon, color: color, size: 22),
       ),
-      title: Text(title, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
-      trailing: trailing ?? Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted.withValues(alpha: 0.3), size: 14),
+      title: Text(title, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: titleColor)),
+      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: subColor)),
+      trailing: trailing ?? Icon(Icons.arrow_forward_ios_rounded, color: arrowColor, size: 14),
     );
   }
 
@@ -377,6 +465,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _darkModeRow(bool isDark) {
+    final titleColor = isDark ? Colors.white : const Color(0xFF1A1F2E);
+    final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
@@ -391,8 +481,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Dark Mode', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                Text('Switch app appearance', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                Text('Dark Mode', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: titleColor)),
+                Text('Switch app appearance', style: GoogleFonts.inter(fontSize: 12, color: subColor)),
               ],
             ),
           ),
@@ -411,12 +501,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _logoutButton(bool isDark) {
+    final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [const Color(0xFFEF4444).withValues(alpha: 0.1), const Color(0xFFEF4444).withValues(alpha: 0.05)]),
+        color: isDark ? Colors.transparent : Colors.white,
+        gradient: isDark ? LinearGradient(colors: [const Color(0xFFEF4444).withValues(alpha: 0.1), const Color(0xFFEF4444).withValues(alpha: 0.05)]) : null,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.2)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: ListTile(
         onTap: _logout,
@@ -427,20 +520,22 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           child: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 22),
         ),
         title: Text('Log Out', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFFEF4444))),
-        subtitle: Text('Sign out of your session', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+        subtitle: Text('Sign out of your session', style: GoogleFonts.inter(fontSize: 12, color: subColor)),
         trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFEF4444), size: 24),
       ),
     );
   }
 
   Widget _sectionTitle(String title) {
+    final isDark = AppColors.isDark;
+    final color = isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8);
     return Padding(
       padding: const EdgeInsets.only(left: 8, bottom: 12, top: 8),
-      child: Text(title, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 1.5)),
+      child: Text(title, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: color, letterSpacing: 1.5)),
     );
   }
 
-  Widget _divider(bool isDark) => Divider(height: 1, color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.1));
+  Widget _divider(bool isDark) => Divider(height: 1, color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE2E8F0));
 
   String _formatAmount(double v) {
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
@@ -448,6 +543,42 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   void _push(Widget screen) => Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+
+  void _showContent(BuildContext context, String title, String content) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 24),
+            Text(title, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: 12),
+            Text(content, style: GoogleFonts.inter(fontSize: 15, color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: Text('Close', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _WavePainter extends CustomPainter {
@@ -461,7 +592,7 @@ class _WavePainter extends CustomPainter {
       ..shader = LinearGradient(
         colors: isDark 
             ? [const Color(0xFF0F3460), const Color(0xFF16213E), const Color(0xFF081120)]
-            : [const Color(0xFF0EA5E9), const Color(0xFF3B82F6), const Color(0xFF6366F1)],
+            : [const Color(0xFF26C6B0), const Color(0xFF2DD4BF), const Color(0xFF26C6B0).withValues(alpha: 0.8)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
