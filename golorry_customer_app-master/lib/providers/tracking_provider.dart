@@ -64,7 +64,10 @@ class TrackingProvider extends ChangeNotifier {
   }
 
   Future<void> _updateRouteAndEta(String apiKey, LatLng destination) async {
-    if (_driverLocation == null) return;
+    if (_driverLocation == null) {
+      print('DEBUG [TrackingProvider]: Driver location is NULL, skipping route update.');
+      return;
+    }
 
     final now = DateTime.now();
     bool shouldFetch = _polylines.isEmpty;
@@ -76,6 +79,8 @@ class TrackingProvider extends ChangeNotifier {
         _lastFetchLocation!.latitude, _lastFetchLocation!.longitude,
       );
       
+      print('DEBUG [TrackingProvider]: Time since last fetch: ${timeDiffSec}s, Distance: ${distDiffMeters.toStringAsFixed(1)}m');
+
       // Throttle: 30s AND 200m
       if (timeDiffSec > 30 && distDiffMeters > 200) {
         shouldFetch = true;
@@ -85,35 +90,41 @@ class TrackingProvider extends ChangeNotifier {
     }
 
     if (shouldFetch) {
-      print('DEBUG Provider: Requesting road-aware directions...');
+      print('DEBUG [TrackingProvider]: Fetching road-following directions from $_driverLocation to $destination');
       final directions = await DirectionsService(apiKey).getDirections(
         origin: _driverLocation!,
         destination: destination,
       );
 
       if (directions != null && directions.polylinePoints.isNotEmpty) {
+        print('DEBUG [TrackingProvider]: Received ${directions.polylinePoints.length} points from Directions API');
+        
         _lastFetchTime = now;
         _lastFetchLocation = _driverLocation;
         _eta = '${directions.durationMin.toStringAsFixed(0)} min';
         _distanceRemaining = '${directions.distanceKm.toStringAsFixed(1)} km';
         
-        // 8. Ensure OLD straight-line code is fully removed.
-        // We only update polylines if we have ACTUAL road points.
+        // Ensure we are using the decoded points
+        final List<LatLng> decodedPoints = List<LatLng>.from(directions.polylinePoints);
+        
         _polylines = {
           Polyline(
             polylineId: const PolylineId('real_road_route'),
-            points: directions.polylinePoints,
+            points: decodedPoints,
             color: const Color(0xFF00915E),
-            width: 6,
+            width: 8, // Slightly thicker for better visibility
             jointType: JointType.round,
             startCap: Cap.roundCap,
             endCap: Cap.roundCap,
+            geodesic: true,
           ),
         };
-        print('DEBUG Provider: Polyline updated with ${directions.polylinePoints.length} points');
+        
+        print('DEBUG [TrackingProvider]: Polylines set updated. notifyListeners() called.');
         notifyListeners();
       } else {
-        print('DEBUG Provider Error: Directions fetch failed or returned 0 points');
+        print('DEBUG [TrackingProvider] Error: Directions fetch failed or returned empty points.');
+        // DO NOT add a straight line fallback here to keep the UI clean as per user request.
       }
     }
   }

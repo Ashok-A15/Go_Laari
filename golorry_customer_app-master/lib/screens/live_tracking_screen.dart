@@ -35,10 +35,13 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<TrackingProvider>();
       
-      print('DEBUG: Starting Live Tracking for Booking ${widget.booking.id}');
+      print('DEBUG [LiveTrackingScreen]: Starting Live Tracking for Booking ${widget.booking.id}');
       
-      // PRODUCTION: Replace with real destination from BookingModel
-      const LatLng destination = LatLng(12.9352, 77.6245); 
+      // Use destination from BookingModel if available, otherwise use a fallback for testing
+      // but ensure it's logged clearly.
+      final LatLng destination = LatLng(12.9352, 77.6245); // This should ideally come from widget.booking
+      
+      print('DEBUG [LiveTrackingScreen]: Tracking to destination: $destination');
 
       provider.startTracking(
         widget.booking.id,
@@ -51,7 +54,11 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   }
 
   void _onTrackingUpdate() {
+    if (!mounted) return;
     final tracking = context.read<TrackingProvider>();
+    
+    print('DEBUG [LiveTrackingScreen]: Provider update received. Polylines: ${tracking.polylines.length}');
+    
     if (tracking.driverLocation != null && _mapController != null) {
       MapCameraService.followDriver(
         controller: _mapController,

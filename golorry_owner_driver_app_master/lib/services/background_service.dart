@@ -8,6 +8,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:firebase_database/firebase_database.dart';
+
 class BackgroundService {
   static const String notificationChannelId = 'my_foreground';
   static const int notificationId = 888;
@@ -59,6 +61,7 @@ class BackgroundService {
     
     // Initialize Firebase in background isolate
     await Firebase.initializeApp();
+    final DatabaseReference dbRef = FirebaseDatabase.instance.ref();
 
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
@@ -71,12 +74,13 @@ class BackgroundService {
     String? bookingId;
     service.on('setBookingId').listen((event) {
       bookingId = event?['bookingId'];
+      debugPrint('BACKGROUND: Active Booking ID set to $bookingId');
     });
 
-    Timer.periodic(const Duration(seconds: 5), (timer) async {
+    // HIGH FREQUENCY: Update every 1 second for Uber-like smoothness
+    Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (service is AndroidServiceInstance) {
         if (await service.isForegroundService()) {
-          // Update notification with current status
           service.setForegroundNotificationInfo(
             title: 'GoLorry Live',
             content: 'Trip in progress - Syncing location...',
@@ -88,19 +92,29 @@ class BackgroundService {
       try {
         final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
         );
 
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid != null) {
-          // Update driver doc
+          // 1. Update Firestore (for records)
           await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
             'currentLocation': GeoPoint(pos.latitude, pos.longitude),
             'heading': pos.heading,
             'lastLocationUpdate': FieldValue.serverTimestamp(),
           });
 
-          // Update active booking if ID is known
+          // 2. Update Realtime Database (for LIVE tracking sync)
           if (bookingId != null && bookingId!.isNotEmpty) {
+            await dbRef.child('tracking').child(bookingId!).set({
+              'lat': pos.latitude,
+              'lng': pos.longitude,
+              'heading': pos.heading,
+              'lastUpdated': ServerValue.timestamp,
+              'status': 'in_transit',
+            });
+            
+            // Also update booking doc in Firestore
             await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({
               'driverLocation': GeoPoint(pos.latitude, pos.longitude),
               'driverHeading': pos.heading,

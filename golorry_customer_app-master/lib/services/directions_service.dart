@@ -31,28 +31,31 @@ class DirectionsService {
         '&destination=${destination.latitude},${destination.longitude}'
         '&mode=driving&departure_time=now&key=$apiKey';
 
-    print('DEBUG: Requesting Directions API: $url');
+    print('DEBUG [DirectionsService]: Requesting URL: $url');
 
     try {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode != 200) {
-        print('DEBUG Error: HTTP ${response.statusCode} - ${response.body}');
+        print('DEBUG [DirectionsService] Error: HTTP ${response.statusCode} - ${response.body}');
         return null;
       }
 
       final data = json.decode(response.body);
       
-      // 1. Print FULL response for debugging
-      print('DEBUG RAW JSON: ${json.encode(data)}');
+      // 1. Print FULL response status and routes count
+      print('DEBUG [DirectionsService] Status: ${data['status']}');
+      if (data['routes'] != null) {
+        print('DEBUG [DirectionsService] Routes Array Count: ${(data['routes'] as List).length}');
+      }
 
       if (data['status'] != 'OK') {
-        print('DEBUG Error: API Status ${data['status']} - ${data['error_message'] ?? 'No message'}');
+        print('DEBUG [DirectionsService] Error Message: ${data['error_message'] ?? 'No message'}');
         return null;
       }
 
       if ((data['routes'] as List).isEmpty) {
-        print('DEBUG Error: Routes array is empty');
+        print('DEBUG [DirectionsService] Error: Routes array is empty');
         return null;
       }
 
@@ -64,30 +67,36 @@ class DirectionsService {
       
       // 2. Verify overview_polyline exists
       if (route['overview_polyline'] == null || route['overview_polyline']['points'] == null) {
-        print('DEBUG Error: overview_polyline.points is MISSING in response');
+        print('DEBUG [DirectionsService] Error: overview_polyline.points is MISSING');
         return null;
       }
 
       final encodedPolyline = route['overview_polyline']['points'];
-      print('DEBUG: Encoded Polyline String: $encodedPolyline');
+      print('DEBUG [DirectionsService] Overview Polyline (Points String): $encodedPolyline');
 
-      // 4. Decode polyline correctly
+      // 3. Decode polyline
       PolylinePoints polylinePoints = PolylinePoints();
       List<PointLatLng> result = polylinePoints.decodePolyline(encodedPolyline);
       
-      print('DEBUG: Total decoded polyline points count: ${result.length}');
+      print('DEBUG [DirectionsService] Total decoded points: ${result.length}');
 
       if (result.isEmpty) {
-        print('DEBUG Warning: Decoded points list is EMPTY');
+        print('DEBUG [DirectionsService] Warning: Decoded points list is EMPTY');
         return null;
+      }
+
+      // 4. Log first 10 coordinates as requested
+      final int logCount = result.length > 10 ? 10 : result.length;
+      print('DEBUG [DirectionsService] First $logCount decoded coordinates:');
+      for (int i = 0; i < logCount; i++) {
+        print('  Point $i: ${result[i].latitude}, ${result[i].longitude}');
       }
 
       // 5. Convert ALL decoded points into List<LatLng>
       List<LatLng> points = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
-      print('DEBUG: polylineCoordinates.length: ${points.length}');
       
       if (points.length <= 2) {
-        print('DEBUG Warning: Only ${points.length} points found. This will look like a straight line!');
+        print('DEBUG [DirectionsService] Warning: Only ${points.length} points found. This might render as a straight line if the distance is large.');
       }
 
       return DirectionsResult(
@@ -96,8 +105,9 @@ class DirectionsService {
         durationMin: durationMin,
         overviewPolyline: encodedPolyline,
       );
-    } catch (e) {
-      print('DEBUG Exception in DirectionsService: $e');
+    } catch (e, stack) {
+      print('DEBUG [DirectionsService] Exception: $e');
+      print('DEBUG [DirectionsService] Stack: $stack');
       return null;
     }
   }

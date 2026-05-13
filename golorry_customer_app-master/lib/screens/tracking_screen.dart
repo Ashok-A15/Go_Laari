@@ -131,18 +131,10 @@ class _TrackingScreenState extends State<TrackingScreen>
             ),
           };
         } else {
-          print('Directions API failed. Showing straight line fallback.');
-          _distanceKm = 8.5;
-          _durationMin = 25;
-          _polylines = {
-            Polyline(
-              polylineId: const PolylineId('route_fallback'),
-              color: AppColors.primary.withOpacity(0.5),
-              width: 4,
-              points: [_pickupLocation!, _dropLocation!],
-              patterns: [PatternItem.dash(20), PatternItem.gap(10)],
-            ),
-          };
+          print('DEBUG [TrackingScreen]: Directions API failed. No fallback straight line will be rendered.');
+          _distanceKm = null;
+          _durationMin = null;
+          _polylines = {};
         }
         _loading = false;
       });

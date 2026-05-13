@@ -315,22 +315,19 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         ));
 
       if (_fullRoutePoints.isNotEmpty) {
+        print('DEBUG [DriverApp]: Rendering road-following route with ${_fullRoutePoints.length} points');
         _polylines.add(Polyline(
           polylineId: const PolylineId('route_full'),
           points: _fullRoutePoints,
           color: const Color(0xFF185A9D), 
-          width: 6, 
+          width: 8, 
           jointType: JointType.round,
           startCap: Cap.roundCap,
           endCap: Cap.roundCap,
+          geodesic: true,
         ));
-      } else if (_pickupLatLng != null && _dropLatLng != null) {
-        _polylines.add(Polyline(
-          polylineId: const PolylineId('route_full'),
-          points: [_pickupLatLng!, _dropLatLng!],
-          color: const Color(0xFF185A9D),
-          width: 6,
-        ));
+      } else {
+        print('DEBUG [DriverApp]: No road points available yet. Checking API...');
       }
 
       _locationUpdateCount++;
