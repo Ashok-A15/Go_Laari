@@ -333,7 +333,12 @@ class _HomeScreenState extends State<HomeScreen>
     if (pickup.isEmpty || drop.isEmpty) return;
 
     print('DEBUG [Booking]: Starting booking flow for $pickup to $drop');
-    setState(() => _isSearching = false);
+    setState(() {
+      _isSearching = false;
+      // CRITICAL: Clear search markers/routes before moving to booking
+      _markers.clear();
+      _polylines.clear();
+    });
 
     // Show loading dialog
     showDialog(
@@ -437,7 +442,14 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _updateMapRoute() async {
     final pickup = _pickupController.text.trim();
     final drop = _dropController.text.trim();
-    if (pickup.isEmpty || drop.isEmpty) return;
+    
+    if (pickup.isEmpty || drop.isEmpty) {
+      setState(() {
+        _polylines.clear();
+        _markers.clear();
+      });
+      return;
+    }
 
     final geo = GeocodingService(MapConstants.googleMapsApiKey);
     final pLatLng = await geo.getCoordinates(pickup);

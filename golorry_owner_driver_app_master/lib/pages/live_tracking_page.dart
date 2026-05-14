@@ -630,21 +630,42 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
             ),
           ),
 
-          // ── Recenter button ──────────────────────────────────────────
+          // ── Map Action Buttons ──────────────────────────────────────
           Positioned(
             right: 16,
             bottom: 280,
-            child: FloatingActionButton.small(
-              heroTag: 'recenter_btn',
-              backgroundColor: Colors.white,
-              onPressed: () {
-                if (_driverLatLng != null) {
-                  _mapController?.animateCamera(
-                      CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
-                }
-              },
-              child: const Icon(Icons.my_location_rounded,
-                  color: Color(0xFF185A9D)),
+            child: Column(
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'refresh_btn',
+                  backgroundColor: Colors.white,
+                  onPressed: () async {
+                    try {
+                      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                      _onNewPosition(pos);
+                      _fetchCoordinates(); // Refresh route points
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Location refreshed'), duration: Duration(seconds: 1))
+                      );
+                    } catch (e) {
+                      debugPrint('Manual refresh failed: $e');
+                    }
+                  },
+                  child: const Icon(Icons.refresh_rounded, color: Color(0xFF185A9D)),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.small(
+                  heroTag: 'recenter_btn',
+                  backgroundColor: Colors.white,
+                  onPressed: () {
+                    if (_driverLatLng != null) {
+                      _mapController?.animateCamera(
+                          CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
+                    }
+                  },
+                  child: const Icon(Icons.my_location_rounded, color: Color(0xFF185A9D)),
+                ),
+              ],
             ),
           ),
 
