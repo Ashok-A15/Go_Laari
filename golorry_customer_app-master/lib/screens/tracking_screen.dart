@@ -11,6 +11,7 @@ import 'package:golorry_customer_app/utils/app_colors.dart';
 import 'package:lottie/lottie.dart';
 import 'package:golorry_customer_app/widgets/skeleton_loader.dart';
 import 'package:golorry_customer_app/utils/marker_helper.dart';
+import 'package:golorry_customer_app/utils/map_constants.dart';
 
 class TrackingScreen extends StatefulWidget {
   final String pickupAddress;
@@ -42,10 +43,6 @@ class TrackingScreen extends StatefulWidget {
 
 class _TrackingScreenState extends State<TrackingScreen>
     with SingleTickerProviderStateMixin {
-  GoogleMapController? _mapController;
-
-  static const _apiKey = 'AIzaSyByiIPu7kHZroCo8L6bgOVIk2t2riBdM4A';
-
   LatLng? _pickupLocation;
   LatLng? _dropLocation;
   Set<gmaps.Marker> _markers = {};
@@ -70,7 +67,7 @@ class _TrackingScreenState extends State<TrackingScreen>
   }
 
   Future<void> _initLocations() async {
-    final geo = GeocodingService(_apiKey);
+    final geo = GeocodingService(MapConstants.googleMapsApiKey);
     _pickupLocation = await geo.getCoordinates(widget.pickupAddress);
     _dropLocation = await geo.getCoordinates(widget.dropAddress);
 
@@ -109,7 +106,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       return;
     }
     
-    final result = await DirectionsService(_apiKey).getDirections(
+    final result = await DirectionsService().getDirections(
       origin: _pickupLocation!,
       destination: _dropLocation!,
     );
@@ -117,46 +114,16 @@ class _TrackingScreenState extends State<TrackingScreen>
     if (mounted) {
       setState(() {
         if (result != null) {
-          _distanceKm = result.distanceKm;
-          _durationMin = result.durationMin;
-          _polylines = {
-            Polyline(
-              polylineId: const PolylineId('route'),
-              color: AppColors.primary,
-              width: 6,
-              points: result.polylinePoints,
-              jointType: JointType.round,
-              startCap: Cap.roundCap,
-              endCap: Cap.roundCap,
-            ),
-          };
+          _distanceKm = result.distanceValue / 1000.0;
+          _durationMin = result.durationValue / 60.0;
+          _loading = false;
         } else {
-          print('DEBUG [TrackingScreen]: Directions API failed. No fallback straight line will be rendered.');
-          _distanceKm = null;
-          _durationMin = null;
-          _polylines = {};
+          _loading = false;
         }
-        _loading = false;
       });
-      _fitCamera();
     }
   }
 
-  void _fitCamera() {
-    if (_mapController == null || _pickupLocation == null || _dropLocation == null) return;
-    
-    final bounds = LatLngBounds(
-      southwest: LatLng(
-        _pickupLocation!.latitude < _dropLocation!.latitude ? _pickupLocation!.latitude : _dropLocation!.latitude,
-        _pickupLocation!.longitude < _dropLocation!.longitude ? _pickupLocation!.longitude : _dropLocation!.longitude,
-      ),
-      northeast: LatLng(
-        _pickupLocation!.latitude > _dropLocation!.latitude ? _pickupLocation!.latitude : _dropLocation!.latitude,
-        _pickupLocation!.longitude > _dropLocation!.longitude ? _pickupLocation!.longitude : _dropLocation!.longitude,
-      ),
-    );
-    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
-  }
 
   Future<void> _confirmBooking() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -293,7 +260,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                           const Divider(height: 32),
                           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                             _statItem('Distance', '${_distanceKm!.toStringAsFixed(1)} km'),
-                            _statItem('Est. Time', '${_durationMin!.toStringAsFixed(0)} min'),
+                            _statItem('Est. Time', '${(_durationMin ?? 25).toStringAsFixed(0)} min'),
                             _statItem('Vehicle', widget.vehicleName),
                           ]),
                         ],

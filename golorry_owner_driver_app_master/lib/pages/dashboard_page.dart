@@ -7,6 +7,7 @@ import '../widgets/owner_map.dart';
 import '../services/firestore_service.dart';
 import 'available_jobs_page.dart';
 import 'tracking_page.dart';
+import 'live_tracking_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -331,42 +332,92 @@ class _DashboardPageState extends State<DashboardPage>
               right: 20,
               child: FadeTransition(
                 opacity: _animController,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text("Status: Online", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                          Text("Waiting for new jobs...", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _firestoreService.getActiveBookingStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      final bookingDoc = snapshot.data!.docs.first;
+                      final bookingData = bookingDoc.data();
+                      final pickup = bookingData['pickupAddress'] ?? bookingData['route'] ?? 'Unknown';
+                      final status = bookingData['status'] ?? 'accepted';
+                      
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF185A9D),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5)),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 28),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text("Active Job: ${status.toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                                  Text(pickup, style: const TextStyle(fontSize: 11, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => LiveTrackingPage(
+                                  bookingId: bookingDoc.id,
+                                  bookingData: bookingData,
+                                )));
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF185A9D),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                              child: const Text("RESUME", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E272E).withOpacity(0.9) : Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5)),
                         ],
                       ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF43CEA2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text("Jobs"),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text("Status: ${_isOnline ? 'Online' : 'Offline'}", style: TextStyle(fontWeight: FontWeight.bold, color: _isOnline ? Colors.green : Colors.grey)),
+                              Text(_isOnline ? "Waiting for new jobs..." : "Go online to see jobs", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF43CEA2),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text("Jobs"),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  }
                 ),
               ),
             ),

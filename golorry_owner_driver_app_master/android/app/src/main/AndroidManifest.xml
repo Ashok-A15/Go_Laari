@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
     <application
         android:label="GoLorry"
@@ -18,7 +21,7 @@
         <!-- ⭐ GOOGLE MAPS API KEY -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyDu2qU2-i-HxrB-x6LrvZbd8HluWdXPs_8"/>
+            android:value="AIzaSyCDeP7KsSbUAmJ-QBSdMCp9ihmEMfjBv4o"/>
 
         <activity
             android:name=".MainActivity"

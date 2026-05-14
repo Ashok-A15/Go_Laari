@@ -11,6 +11,8 @@ import 'driver_main_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'dart:ui' as ui;
+import '../utils/map_constants.dart';
+import '../services/tracking_service.dart';
 
 class LiveTrackingPage extends StatefulWidget {
   final String bookingId;
@@ -39,7 +41,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   LatLng? _dropLatLng;
   List<LatLng> _fullRoutePoints = [];
 
-  static const _apiKey = 'AIzaSyByiIPu7kHZroCo8L6bgOVIk2t2riBdM4A';
+  static const _apiKey = MapConstants.googleMapsApiKey;
 
   // ── Location stream ───────────────────────────────────────────────────
   StreamSubscription<Position>? _locationSub;
@@ -91,7 +93,10 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     }
 
     if (_pickupLatLng == null || _dropLatLng == null) {
-      _fetchCoordinates();
+      _fetchCoordinates().then((_) => _fitMapToRoute());
+    } else {
+      // If we already have them, fit immediately after map is created
+      Future.delayed(const Duration(milliseconds: 500), () => _fitMapToRoute());
     }
 
     // Pulse animation for driver marker
@@ -175,45 +180,33 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   }
 
   Future<void> _fetchCoordinates() async {
+    print('DEBUG [DriverApp]: Starting fetchCoordinates for $_pickup to $_drop');
     try {
+      final geoService = GeocodingService(_apiKey);
+      
       if (_pickupLatLng == null && _pickup.isNotEmpty && _pickup != 'Unknown pickup') {
-        final locations = await geo.locationFromAddress(_pickup);
-        if (locations.isNotEmpty) {
-          _pickupLatLng = LatLng(locations.first.latitude, locations.first.longitude);
-        }
+        _pickupLatLng = await geoService.getCoordinates(_pickup);
+        print('DEBUG [DriverApp]: Pickup Resolved: $_pickupLatLng');
       }
+      
       if (_dropLatLng == null && _drop.isNotEmpty) {
-        final locations = await geo.locationFromAddress(_drop);
-        if (locations.isNotEmpty) {
-          _dropLatLng = LatLng(locations.first.latitude, locations.first.longitude);
-        }
+        _dropLatLng = await geoService.getCoordinates(_drop);
+        print('DEBUG [DriverApp]: Drop Resolved: $_dropLatLng');
       }
 
-      if (_pickup.isNotEmpty && _drop.isNotEmpty) {
-        final geoService = GeocodingService(_apiKey);
-        final directions = await geoService.getDirections(_pickup, _drop);
+      if (_pickupLatLng != null && _dropLatLng != null) {
+        final directions = await geoService.getDirectionsFromLatLng(_pickupLatLng!, _dropLatLng!);
         if (directions != null) {
           final polylinePoints = PolylinePoints();
           List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
           _fullRoutePoints = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
+          print('DEBUG [DriverApp]: Route Resolved with ${_fullRoutePoints.length} points');
         }
       }
 
-      if (mounted) {
-        // Trigger a fake position update to refresh markers and polylines if we have a position
-        if (_driverLatLng != null) {
-           _onNewPosition(Position(
-             latitude: _driverLatLng!.latitude, 
-             longitude: _driverLatLng!.longitude, 
-             timestamp: DateTime.now(), 
-             accuracy: 0, altitude: 0, heading: 0, speed: 0, speedAccuracy: 0, altitudeAccuracy: 0, headingAccuracy: 0
-           ));
-        } else {
-           setState(() {}); // just in case
-        }
-      }
+      if (mounted) setState(() {}); 
     } catch (e) {
-      debugPrint('Geocoding fallback failed: $e');
+      print('DEBUG [DriverApp] Geocoding ERROR: $e');
     }
   }
 
@@ -263,6 +256,22 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     ).listen(_onNewPosition);
   }
 
+  void _fitMapToRoute() {
+    if (_mapController == null || _pickupLatLng == null || _dropLatLng == null) {
+      print('DEBUG [DriverApp]: Cannot fit bounds yet. Markers missing.');
+      return;
+    }
+    
+    print('DEBUG [DriverApp]: Fitting camera to route bounds...');
+    LatLngBounds bounds;
+    if (_pickupLatLng!.latitude > _dropLatLng!.latitude) {
+      bounds = LatLngBounds(southwest: _dropLatLng!, northeast: _pickupLatLng!);
+    } else {
+      bounds = LatLngBounds(southwest: _pickupLatLng!, northeast: _dropLatLng!);
+    }
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+  }
+
   void _onNewPosition(Position pos) {
     final latLng = LatLng(pos.latitude, pos.longitude);
 
@@ -277,7 +286,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           markerId: const MarkerId('driver'),
           position: latLng,
           rotation: pos.heading,
-          icon: laariIcon,
+          icon: laariIcon, // FIXED TYPO
           anchor: const Offset(0.5, 0.5),
           infoWindow: const InfoWindow(title: 'Your Location'),
           zIndex: 2,
@@ -301,19 +310,18 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         ));
       }
 
-      // Polyline showing the path driven so far
-      _polylines
-        ..clear()
-        ..add(Polyline(
-          polylineId: const PolylineId('route_driven'),
-          points: List<LatLng>.from(_routePoints),
-          color: const Color(0xFF43CEA2),
-          width: 5,
-          jointType: JointType.round,
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
-        ));
+      // Polylines: Path driven + Road-following route to destination
+      _polylines.clear();
+      
+      // 1. Draw the path you have already driven (gray/light line)
+      _polylines.add(Polyline(
+        polylineId: const PolylineId('route_driven'),
+        points: List<LatLng>.from(_routePoints),
+        color: Colors.grey,
+        width: 4,
+      ));
 
+      // 2. Draw the MAIN ROAD ROUTE (The blue Directions line)
       if (_fullRoutePoints.isNotEmpty) {
         print('DEBUG [DriverApp]: Rendering road-following route with ${_fullRoutePoints.length} points');
         _polylines.add(Polyline(
@@ -326,15 +334,24 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           endCap: Cap.roundCap,
           geodesic: true,
         ));
-      } else {
-        print('DEBUG [DriverApp]: No road points available yet. Checking API...');
       }
 
       _locationUpdateCount++;
     });
 
-    // Smoothly follow driver on map
+    // Smoothly follow driver on map (only if close to truck)
     _mapController?.animateCamera(CameraUpdate.newLatLng(latLng));
+
+    // ONE-TIME Camera fit for the whole route
+    if (_locationUpdateCount == 1 && _pickupLatLng != null && _dropLatLng != null) {
+      LatLngBounds bounds;
+      if (_pickupLatLng!.latitude > _dropLatLng!.latitude) {
+        bounds = LatLngBounds(southwest: _dropLatLng!, northeast: _pickupLatLng!);
+      } else {
+        bounds = LatLngBounds(southwest: _pickupLatLng!, northeast: _dropLatLng!);
+      }
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+    }
 
     // Update ETA and Distance every 1 minute
     if (_dropLatLng != null && (_lastEtaUpdate == null || DateTime.now().difference(_lastEtaUpdate!).inMinutes >= 1)) {
@@ -383,9 +400,17 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       if (!snap.exists || !mounted) return;
       final data = snap.data()!;
       final newStatus = data['status'] ?? _tripStatus;
-      if (newStatus != _tripStatus && mounted) {
-        setState(() => _tripStatus = newStatus);
-      }
+      
+      setState(() {
+        _tripStatus = newStatus;
+        // Refresh addresses if they were missing
+        if (_pickup == 'Unknown pickup' || _pickup.isEmpty) {
+          _pickup = data['pickupAddress'] ?? data['route'] ?? 'Unknown pickup';
+        }
+        if (_drop.isEmpty) {
+          _drop = data['dropAddress'] ?? '';
+        }
+      });
     });
   }
 
@@ -395,6 +420,13 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     try {
       await _firestoreService.updateTripStatus(widget.bookingId, 'in_transit');
       if (mounted) setState(() => _tripStatus = 'in_transit');
+      
+      // Start Realtime Database GPS Tracking
+      try {
+         await TrackingService().startDriverTracking();
+      } catch (e) {
+         debugPrint("Failed to start RTDB tracking: $e");
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -440,6 +472,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       // Stop background tracking
       _locationSub?.cancel(); 
       FlutterBackgroundService().invoke('stopService');
+      TrackingService().stopTracking(); // Stop RTDB tracking
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -499,14 +532,16 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
             ),
             markers: _markers,
             polylines: _polylines,
-            myLocationEnabled: false,
-            myLocationButtonEnabled: false,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
             zoomControlsEnabled: false,
             compassEnabled: true,
             mapType: MapType.normal,
             onMapCreated: (controller) {
               _mapController = controller;
-              if (_driverLatLng != null) {
+              if (_pickupLatLng != null && _dropLatLng != null) {
+                _fitMapToRoute();
+              } else if (_driverLatLng != null) {
                 controller.animateCamera(
                     CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
               }

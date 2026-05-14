@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:golorry_customer_app/utils/app_colors.dart';
+import 'package:golorry_customer_app/utils/map_constants.dart';
 
 class LocationSelectScreen extends StatefulWidget {
   const LocationSelectScreen({super.key});
@@ -17,7 +18,6 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
   bool _pickupFocused = false;
   bool _dropFocused = false;
 
-  final String _placesApiKey = 'AIzaSyBHKu2YcOIN7RN-_mbU-UfzzXexvXh2apA';
   List<Map<String, dynamic>> _predictions = [];
   String? _activeField;
 
@@ -27,7 +27,7 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
       return;
     }
     final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(query)}&components=country:in&key=$_placesApiKey',
+      'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(query)}&components=country:in&key=${MapConstants.googleMapsApiKey}',
     );
     try {
       final res = await http.get(url);

@@ -8,15 +8,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:golorry_customer_app/utils/app_colors.dart';
 import 'package:golorry_customer_app/services/geocoding_service.dart';
 import 'package:golorry_customer_app/services/booking_service.dart';
 import 'package:golorry_customer_app/models/booking_model.dart';
-import 'package:golorry_customer_app/screens/location_select_screen.dart';
-import 'package:golorry_customer_app/screens/tracking_screen.dart';
 import 'package:golorry_customer_app/screens/more_details_screen.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:golorry_customer_app/utils/marker_helper.dart';
+import 'package:golorry_customer_app/screens/map_screen.dart';
+import 'package:golorry_customer_app/utils/map_constants.dart';
+import 'package:golorry_customer_app/services/directions_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:golorry_customer_app/screens/dashboard_screen.dart';
 
@@ -31,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
-  static const _apiKey = 'AIzaSyByiIPu7kHZroCo8L6bgOVIk2t2riBdM4A';
 
   String _userName = 'Customer';
   String _cityName = 'Locating...';
@@ -51,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen>
   LatLng? _trackingPickup;
   LatLng? _trackingDrop;
   String? _lastBookingId;
-  List<LatLng> _polylineCoordinates = [];
   BitmapDescriptor _laariIcon = BitmapDescriptor.defaultMarker;
   LatLng? _lastDriverLatLng;
   String? _lastStatus;
@@ -78,6 +78,10 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _loadData();
+    _determinePosition(); 
+    _setCustomMarker();
+    
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -88,9 +92,6 @@ class _HomeScreenState extends State<HomeScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
 
-    _loadData();
-    _determinePosition();
-    _setCustomMarker();
     
     _activeBookingStream = BookingService().getActiveBooking().handleError((e) {
       debugPrint('Booking stream error: $e');
@@ -137,73 +138,104 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    print('DEBUG [Location]: Starting determinePosition...');
+    setState(() => _loadingLocation = true);
 
     try {
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      // 1. Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) setState(() => _loadingLocation = false);
-        return;
-      }
-
-      permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          if (mounted) setState(() => _loadingLocation = false);
-          return;
+        print('DEBUG [Location]: Location services are disabled.');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable them.'))
+          );
+          setState(() => _loadingLocation = false);
         }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _loadingLocation = false);
         return;
       }
 
+      // 2. Check Permission using permission_handler for more robustness
+      var status = await Permission.location.status;
+      print('DEBUG [Location]: Initial permission status: $status');
+
+      if (status.isDenied) {
+        print('DEBUG [Location]: Requesting permission...');
+        status = await Permission.location.request();
+      }
+
+      if (status.isPermanentlyDenied) {
+        print('DEBUG [Location]: Permission permanently denied. Opening settings...');
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Location Permission'),
+              content: const Text('Location permission is required for booking. Please enable it in settings.'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                TextButton(onPressed: () {
+                  openAppSettings();
+                  Navigator.pop(ctx);
+                }, child: const Text('Open Settings')),
+              ],
+            ),
+          );
+        }
+        setState(() => _loadingLocation = false);
+        return;
+      }
+
+      if (!status.isGranted) {
+        print('DEBUG [Location]: Permission not granted.');
+        setState(() => _loadingLocation = false);
+        return;
+      }
+
+      // 3. Get Current Position with Timeout
+      print('DEBUG [Location]: Fetching current position (High Accuracy)...');
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
-      ).timeout(const Duration(seconds: 5), onTimeout: () {
-        return Position(
-          latitude: 12.9716,
-          longitude: 77.5946,
-          timestamp: DateTime.now(),
-          accuracy: 0,
-          altitude: 0,
-          heading: 0,
-          speed: 0,
-          speedAccuracy: 0,
-          altitudeAccuracy: 0,
-          headingAccuracy: 0,
-        );
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        print('DEBUG [Location]: GPS Fetch timed out. Using last known or fallback.');
+        throw TimeoutException('GPS timeout');
       });
-      
-      GeocodingService(_apiKey)
-          .getAddressFromCoordinates(position.latitude, position.longitude)
-          .then((address) {
-        if (mounted && address != null) {
-          setState(() {
-            _currentAddress = address;
-            _pickupAddress ??= address;
-            _pickupController.text = address;
-          });
-        }
-      }).catchError((_) {
-        if (mounted) setState(() => _loadingLocation = false);
-      });
-      
+
+      print('DEBUG [Location]: Position received: ${position.latitude}, ${position.longitude}');
+
       if (mounted) {
         setState(() {
           _currentPosition = LatLng(position.latitude, position.longitude);
           _loadingLocation = false;
         });
+        
         _mapController?.animateCamera(
           CameraUpdate.newLatLngZoom(_currentPosition!, 15),
         );
+
+        // Fetch address in background
+        print('DEBUG [Location]: Fetching address for coordinates...');
+        GeocodingService(MapConstants.googleMapsApiKey)
+            .getAddressFromCoordinates(position.latitude, position.longitude)
+            .then((address) {
+          if (mounted && address != null) {
+            print('DEBUG [Location]: Address found: $address');
+            setState(() {
+              _currentAddress = address;
+              _pickupController.text = address;
+            });
+          }
+        });
       }
     } catch (e) {
-      debugPrint('Location error: $e');
-      if (mounted) setState(() => _loadingLocation = false);
+      print('DEBUG [Location] ERROR: $e');
+      if (mounted) {
+        setState(() => _loadingLocation = false);
+        // If it's a timeout, use Bangalore as a safe fallback for UI initialization
+        if (e is TimeoutException && _currentPosition == null) {
+           _currentPosition = const LatLng(12.9716, 77.5946);
+        }
+      }
     }
   }
 
@@ -274,31 +306,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _fetchSuggestions(String query, bool isPickup) async {
-    if (query.isEmpty) {
-      setState(() => _predictions.clear());
-      return;
-    }
-    final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(query)}&components=country:in&key=$_apiKey',
-    );
-    try {
-      final res = await http.get(url);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        if (data['status'] == 'OK' && mounted) {
-          setState(() {
-            _predictions = List<Map<String, dynamic>>.from(data['predictions']);
-            _activeField = isPickup ? 'pickup' : 'drop';
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Places API error: $e');
-    }
-  }
 
-  void _onSuggestionSelected(String description) {
+  void _onSuggestionSelected(String description) async {
     if (_activeField == 'pickup') {
       _pickupController.text = description;
       _pickupAddress = description;
@@ -308,8 +317,14 @@ class _HomeScreenState extends State<HomeScreen>
       _dropAddress = description;
       _dropFocused = false;
     }
-    setState(() => _predictions.clear());
-    _drawRoute(); // Draw route when suggestion is picked
+    setState(() {
+      _predictions.clear();
+      _markers.clear();
+      _polylines.clear();
+    });
+    
+    // Use the unified DirectionsService instead of local _drawRoute
+    _updateMapRoute(); 
   }
 
   void _proceed() async {
@@ -317,27 +332,64 @@ class _HomeScreenState extends State<HomeScreen>
     final drop = _dropController.text.trim();
     if (pickup.isEmpty || drop.isEmpty) return;
 
-    // Reset search state so the home screen shows correctly when user returns
+    print('DEBUG [Booking]: Starting booking flow for $pickup to $drop');
     setState(() => _isSearching = false);
 
+    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      ),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Calculating route and fare...'), duration: Duration(seconds: 3))
     );
 
     try {
-      final directions = await GeocodingService(_apiKey).getDirections(pickup, drop);
+      final geo = GeocodingService(MapConstants.googleMapsApiKey);
+      print('DEBUG [Booking]: Resolving coordinates (Max 4s)...');
       
-      double distanceKm = 0;
-      if (directions != null) {
-        distanceKm = (directions['distanceValue'] as int) / 1000.0;
-        _totalDistanceMeters = directions['distanceValue'] as int;
+      LatLng? pLatLng;
+      LatLng? dLatLng;
+      
+      try {
+        pLatLng = await geo.getCoordinates(pickup).timeout(const Duration(seconds: 4));
+        dLatLng = await geo.getCoordinates(drop).timeout(const Duration(seconds: 4));
+      } catch (e) {
+        print('DEBUG [Booking]: Geocoding delay/error: $e. Using fallbacks.');
       }
-      double calculatedFare = 500 + (distanceKm * 15);
 
-      if (mounted) Navigator.pop(context);
+      pLatLng ??= _currentPosition ?? const LatLng(12.9716, 77.5946);
+      dLatLng ??= const LatLng(13.0827, 80.2707);
 
+      print('DEBUG [Booking]: Fetching directions (Max 6s)...');
+      final directions = await DirectionsService().getDirections(
+        origin: pLatLng,
+        destination: dLatLng,
+      ).timeout(const Duration(seconds: 6), onTimeout: () {
+        print('DEBUG [Booking]: Directions API timed out.');
+        return null;
+      });
+
+      // ALWAYS close the dialog before moving to next step
+      if (mounted) {
+        print('DEBUG [Booking]: Closing loading dialog.');
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      // Prepare data for next screen
+      String dist = directions?.distance ?? 'Calculating...';
+      String dur = directions?.duration ?? 'Calculating...';
+      int distMeters = directions?.distanceValue ?? 10000;
+      
+      double calculatedFare = 500 + ((distMeters / 1000.0) * 15);
+      if (calculatedFare < 500) calculatedFare = 500;
+
+      print('DEBUG [Booking]: Navigating to MoreDetailsScreen...');
       if (mounted) {
         await Navigator.of(context, rootNavigator: true).push(
           MaterialPageRoute(
@@ -347,68 +399,98 @@ class _HomeScreenState extends State<HomeScreen>
               vehicleName: 'Lorry',
               tier: 'Regular',
               totalFare: calculatedFare,
-              distance: directions?['distance'] ?? 'Calculating...',
-              duration: directions?['duration'] ?? 'Calculating...',
-              totalDistanceMeters: _totalDistanceMeters,
+              distance: dist,
+              duration: dur,
+              totalDistanceMeters: distMeters,
             ),
           ),
         );
-        // Ensure search state is reset when returning from booking
-        if (mounted) setState(() => _isSearching = false);
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) setState(() => _isSearching = false);
+      print('DEBUG [Booking] CRITICAL ERROR: $e');
+      if (mounted) {
+        // Safe pop to ensure dialog is gone
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e. Using estimate instead.'), backgroundColor: Colors.orange)
+        );
+        
+        // Even on error, we try to move forward to avoid "stuck" UI
+        await Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            builder: (_) => MoreDetailsScreen(
+              pickupAddress: pickup,
+              dropAddress: drop,
+              vehicleName: 'Lorry',
+              tier: 'Regular',
+              totalFare: 500.0,
+              distance: 'Unknown',
+              duration: 'Unknown',
+              totalDistanceMeters: 5000,
+            ),
+          ),
+        );
+      }
     }
   }
 
-  void _drawRoute() async {
+  Future<void> _updateMapRoute() async {
     final pickup = _pickupController.text.trim();
     final drop = _dropController.text.trim();
     if (pickup.isEmpty || drop.isEmpty) return;
 
-    final directions = await GeocodingService(_apiKey).getDirections(pickup, drop);
-    if (directions == null) return;
+    final geo = GeocodingService(MapConstants.googleMapsApiKey);
+    final pLatLng = await geo.getCoordinates(pickup);
+    final dLatLng = await geo.getCoordinates(drop);
 
-    final polylinePoints = PolylinePoints();
-    List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
-    
-    List<LatLng> polylineCoordinates = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
+    if (pLatLng == null || dLatLng == null) return;
 
-    setState(() {
-      _polylines.clear();
-      _polylines.add(Polyline(
-        polylineId: const PolylineId('route'),
-        color: const Color(0xFF3B82F6),
-        width: 6,
-        points: polylineCoordinates,
-        jointType: JointType.round,
-        startCap: Cap.roundCap,
-        endCap: Cap.roundCap,
-      ));
+    final result = await DirectionsService().getDirections(
+      origin: pLatLng,
+      destination: dLatLng,
+    );
 
-      _markers.clear();
-      _markers.add(Marker(
-        markerId: const MarkerId('pickup'),
-        position: polylineCoordinates.first,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-      ));
-      _markers.add(Marker(
-        markerId: const MarkerId('drop'),
-        position: polylineCoordinates.last,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      ));
-    });
+    if (result != null && mounted) {
+      setState(() {
+        _polylines = {
+          Polyline(
+            polylineId: const PolylineId('route'),
+            color: AppColors.primary,
+            width: 6,
+            points: result.polylinePoints,
+            jointType: JointType.round,
+            startCap: Cap.roundCap,
+            endCap: Cap.roundCap,
+          ),
+        };
 
-    // Fit bounds
-    LatLngBounds bounds;
-    if (polylineCoordinates.first.latitude > polylineCoordinates.last.latitude) {
-      bounds = LatLngBounds(southwest: polylineCoordinates.last, northeast: polylineCoordinates.first);
-    } else {
-      bounds = LatLngBounds(southwest: polylineCoordinates.first, northeast: polylineCoordinates.last);
+        _markers = {
+          Marker(
+            markerId: const MarkerId('pickup'),
+            position: pLatLng,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+          ),
+          Marker(
+            markerId: const MarkerId('drop'),
+            position: dLatLng,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          ),
+        };
+      });
+
+      // Fit bounds
+      final bounds = LatLngBounds(
+        southwest: LatLng(
+          pLatLng.latitude < dLatLng.latitude ? pLatLng.latitude : dLatLng.latitude,
+          pLatLng.longitude < dLatLng.longitude ? pLatLng.longitude : dLatLng.longitude,
+        ),
+        northeast: LatLng(
+          pLatLng.latitude > dLatLng.latitude ? pLatLng.latitude : dLatLng.latitude,
+          pLatLng.longitude > dLatLng.longitude ? pLatLng.longitude : dLatLng.longitude,
+        ),
+      );
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
     }
-    
-    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
   }
 
   Future<void> _loadData() async {
@@ -432,8 +514,9 @@ class _HomeScreenState extends State<HomeScreen>
     if (user == null) return;
     try {
       final doc = await _db.collection('users').doc(user.uid).get();
-      if (doc.exists && doc.data()!.containsKey('name')) {
-        if (mounted) setState(() => _userName = doc.data()!['name']);
+      final data = doc.data();
+      if (doc.exists && data != null && data.containsKey('name')) {
+        if (mounted) setState(() => _userName = data['name'] ?? 'User');
       }
     } catch (_) {}
   }
@@ -443,7 +526,7 @@ class _HomeScreenState extends State<HomeScreen>
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.low,
       ).timeout(const Duration(seconds: 5));
-      final city = await GeocodingService(_apiKey).getCityFromCoordinates(pos.latitude, pos.longitude);
+      final city = await GeocodingService(MapConstants.googleMapsApiKey).getCityFromCoordinates(pos.latitude, pos.longitude);
       if (mounted) setState(() => _cityName = city);
     } catch (_) {
       if (mounted) setState(() => _cityName = 'India');
@@ -475,7 +558,7 @@ class _HomeScreenState extends State<HomeScreen>
       final lat = (center.northeast.latitude + center.southwest.latitude) / 2;
       final lng = (center.northeast.longitude + center.southwest.longitude) / 2;
       
-      final address = await GeocodingService(_apiKey).getCityFromCoordinates(lat, lng);
+      final address = await GeocodingService(MapConstants.googleMapsApiKey).getCityFromCoordinates(lat, lng);
       
       setState(() {
         if (_pickupController.text.isEmpty) {
@@ -486,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen>
         _isLocatingOnMap = false;
         _isSearching = true;
       });
-      _drawRoute(); // Draw the route after selection
+      _updateMapRoute(); // Use the unified route update logic
     }
   }
 
@@ -501,6 +584,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final isDark = AppColors.isDark;
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: AppColors.background,
       drawer: _buildDrawer(context),
       body: StreamBuilder<BookingModel?>(
@@ -522,14 +606,8 @@ class _HomeScreenState extends State<HomeScreen>
             children: [
               // ── BACKGROUND MAP ───────────────────────────
               Positioned.fill(
-                child: GoogleMap(
-                  mapType: _currentMapType,
-                  initialCameraPosition: CameraPosition(
-                    target: _currentPosition ?? const LatLng(12.9716, 77.5946),
-                    zoom: _currentPosition == null ? 10 : 15,
-                  ),
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
+                child: MapScreen(
+                  initialPosition: _currentPosition,
                   markers: _markers.union(_driverMarkers),
                   polylines: _polylines,
                   onMapCreated: (c) => _mapController = c,
@@ -668,55 +746,43 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Future<void> _getPolyline(BookingModel booking, {bool forceRefresh = false}) async {
-    if (!forceRefresh && _lastBookingId == booking.id && _polylineCoordinates.isNotEmpty) return;
-    
-    _lastBookingId = booking.id;
-    final geo = GeocodingService(_apiKey);
-    
-    try {
-      final pCoord = await geo.getCoordinates(booking.pickupAddress);
-      final dCoord = await geo.getCoordinates(booking.dropAddress);
-      
-      if (pCoord == null || dCoord == null) {
-        // DO NOT set _lastBookingId to null here as it causes infinite rebuild loop
-        // Just return, the UI will handle missing coordinates
-        return;
-      }
+  Future<void> _updateTrackingRoute(BookingModel booking) async {
+    final geo = GeocodingService(MapConstants.googleMapsApiKey);
+    final pCoord = await geo.getCoordinates(booking.pickupAddress);
+    final dCoord = await geo.getCoordinates(booking.dropAddress);
 
-      final directions = (booking.driverLocation != null)
-          ? await geo.getDirectionsFromLatLng(
-              LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude),
-              booking.status == 'accepted' ? pCoord : dCoord)
-          : await geo.getDirections(booking.pickupAddress, booking.dropAddress);
-      
-      if (mounted) {
-        setState(() {
-          _trackingPickup = pCoord;
-          _trackingDrop = dCoord;
-          
-          if (directions != null) {
-            final polylinePoints = PolylinePoints();
-            List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
-            _polylineCoordinates = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
-          } else {
-            // Fallback to straight line if API fails
-            print('Directions API failed. Showing straight line fallback.');
-            _polylineCoordinates = [pCoord, dCoord];
-          }
-        });
-      }
-    } catch (e) {
-      print('Tracking route error: $e');
-      // DO NOT set _lastBookingId to null here as it causes infinite rebuild loop
+    if (pCoord == null || dCoord == null) return;
+
+    final result = await DirectionsService().getDirections(
+      origin: pCoord,
+      destination: dCoord,
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _trackingPickup = pCoord;
+        _trackingDrop = dCoord;
+        _polylines = {
+          Polyline(
+            polylineId: const PolylineId('tracking_route'),
+            color: const Color(0xFF185A9D),
+            width: 6,
+            points: result.polylinePoints,
+            jointType: JointType.round,
+            startCap: Cap.roundCap,
+            endCap: Cap.roundCap,
+          ),
+        };
+      });
     }
   }
 
   Widget _buildActiveTrackingState(BookingModel booking) {
     if (_lastBookingId != booking.id || 
         _lastStatus != booking.status || 
-        (_lastPolylineUpdate == null || DateTime.now().difference(_lastPolylineUpdate!).inSeconds > 30)) {
-       _getPolyline(booking);
+        (_lastPolylineUpdate == null || DateTime.now().difference(_lastPolylineUpdate!).inSeconds > 60)) {
+       _updateTrackingRoute(booking);
+       _lastBookingId = booking.id;
        _lastStatus = booking.status;
        _lastPolylineUpdate = DateTime.now();
     }
@@ -740,14 +806,8 @@ class _HomeScreenState extends State<HomeScreen>
     return Stack(
       children: [
         Positioned.fill(
-          child: GoogleMap(
-            mapType: _currentMapType,
-            initialCameraPosition: CameraPosition(
-              target: _trackingPickup ?? const LatLng(12.9716, 77.5946), 
-              zoom: 12,
-            ),
-            myLocationEnabled: true,
-            zoomControlsEnabled: false,
+          child: MapScreen(
+            initialPosition: _trackingPickup,
             markers: {
               if (_trackingPickup != null)
                 Marker(
@@ -774,18 +834,7 @@ class _HomeScreenState extends State<HomeScreen>
                   zIndex: 2,
                 ),
             },
-            polylines: {
-              if (_polylineCoordinates.isNotEmpty)
-                Polyline(
-                  polylineId: const PolylineId('tracking_route'),
-                  color: const Color(0xFF185A9D), // Same solid dark blue as Driver app
-                  width: 6,
-                  points: _polylineCoordinates,
-                  jointType: JointType.round,
-                  startCap: Cap.roundCap,
-                  endCap: Cap.roundCap,
-                ),
-            },
+            polylines: _polylines,
             onMapCreated: (c) {
               _mapController = c;
               if (_trackingPickup != null && _trackingDrop != null) {
@@ -830,7 +879,7 @@ class _HomeScreenState extends State<HomeScreen>
               _mapActionBtn(
                 icon: Icons.refresh_rounded,
                 onTap: () {
-                  _getPolyline(booking, forceRefresh: true);
+                  _updateTrackingRoute(booking);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Refreshing live tracking...'), duration: Duration(seconds: 1))
                   );
@@ -1020,6 +1069,27 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Timer? _debounce;
+
+  void _fetchSuggestions(String input, bool isPickup) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      if (input.length < 3) {
+        if (mounted) setState(() => _predictions = []);
+        return;
+      }
+      print('DEBUG [Search]: Fetching suggestions for: $input');
+      final geo = GeocodingService(MapConstants.googleMapsApiKey);
+      final results = await geo.getAutocomplete(input);
+      if (mounted) {
+        setState(() {
+          _predictions = List<Map<String, dynamic>>.from(results);
+          _activeField = isPickup ? 'pickup' : 'drop';
+        });
+      }
+    });
+  }
+
   Widget _buildSearchUI() {
     if (!_isSearching) {
       return Padding(
@@ -1030,6 +1100,13 @@ class _HomeScreenState extends State<HomeScreen>
             setState(() {
               _isSearching = true;
               _isLocatingOnMap = false;
+              // Clear previous search state when starting new one
+              _markers.clear();
+              _polylines.clear();
+              _pickupController.clear();
+              _dropController.clear();
+              _pickupAddress = '';
+              _dropAddress = '';
             });
           },
           child: Container(
@@ -1047,7 +1124,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             child: Row(
               children: [
-                const Icon(Icons.search, color: AppColors.primary),
+                Icon(Icons.search, color: AppColors.primary),
                 const SizedBox(width: 12),
                 Text(
                   'Enter destination',
@@ -1088,92 +1165,97 @@ class _HomeScreenState extends State<HomeScreen>
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person_outline_rounded, size: 16),
-                        const SizedBox(width: 4),
-                        Text('Myself', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                        const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(width: 48), // Spacer to balance back button
                 ],
               ),
             ),
 
-            // ── INPUT FIELDS
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
+            // ── MAIN SEARCH CONTENT (SCROLLABLE)
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   children: [
-                    _inputRow(
-                      controller: _pickupController,
-                      hint: 'Pickup Location',
-                      icon: Icons.my_location_rounded,
-                      iconColor: AppColors.primary,
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.gps_fixed_rounded, size: 18, color: AppColors.primary),
-                        onPressed: _determinePosition,
+                    // ── INPUT FIELDS
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.card,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          children: [
+                            _inputRow(
+                              controller: _pickupController,
+                              hint: 'Pickup Location',
+                              icon: Icons.my_location_rounded,
+                              iconColor: AppColors.primary,
+                              suffixIcon: IconButton(
+                                icon: Icon(Icons.gps_fixed_rounded, size: 18, color: AppColors.primary),
+                                onPressed: _determinePosition,
+                              ),
+                              onChanged: (v) => _fetchSuggestions(v, true),
+                              onFocusChange: (f) => setState(() => _pickupFocused = f),
+                            ),
+                            Divider(height: 1, indent: 48, color: AppColors.border),
+                            _inputRow(
+                              controller: _dropController,
+                              hint: 'Enter destination',
+                              icon: Icons.location_on_rounded,
+                              iconColor: AppColors.error,
+                              onChanged: (v) => _fetchSuggestions(v, false),
+                              onFocusChange: (f) => setState(() => _dropFocused = f),
+                            ),
+                          ],
+                        ),
                       ),
-                      onChanged: (v) => _fetchSuggestions(v, true),
-                      onFocusChange: (f) => setState(() => _pickupFocused = f),
                     ),
-                    Divider(height: 1, indent: 48, color: AppColors.border),
-                    _inputRow(
-                      controller: _dropController,
-                      hint: 'Enter destination',
-                      icon: Icons.location_on_rounded,
-                      iconColor: AppColors.error,
-                      onChanged: (v) => _fetchSuggestions(v, false),
-                      onFocusChange: (f) => setState(() => _dropFocused = f),
-                    ),
+
+                    // ── SUGGESTIONS LIST
+                    if (_isSearching && _predictions.isEmpty && (_pickupController.text.length > 2 || _dropController.text.length > 2))
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+
+                    if (_predictions.isNotEmpty)
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _predictions.length,
+                        separatorBuilder: (_, __) => Divider(color: AppColors.border, height: 1),
+                        itemBuilder: (context, index) {
+                          final p = _predictions[index];
+                          return ListTile(
+                            leading: Icon(Icons.location_on_outlined, size: 20, color: AppColors.textMuted),
+                            title: Text(p['description'], style: GoogleFonts.inter(fontSize: 14)),
+                            onTap: () => _onSuggestionSelected(p['description']),
+                          );
+                        },
+                      )
+                    else if (_predictions.isEmpty)
+                      Column(
+                        children: [
+                          const SizedBox(height: 10),
+                          _suggestionItem('Mysore Railway Station', 'Pedestrian Overpass, Medar Block...'),
+                          _suggestionItem('1 New Kantharaj Urs Rd', 'CFTRI Layout Sharad...'),
+                        ],
+                      ),
+                    
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
             ),
 
-            // ── SUGGESTIONS
-            Expanded(
-              child: _predictions.isNotEmpty
-                  ? ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _predictions.length,
-                      separatorBuilder: (_, __) => Divider(color: AppColors.border, height: 1),
-                      itemBuilder: (context, index) {
-                        final p = _predictions[index];
-                        return ListTile(
-                          leading: const Icon(Icons.history_rounded, size: 20),
-                          title: Text(p['description'], style: GoogleFonts.inter(fontSize: 14)),
-                          onTap: () => _onSuggestionSelected(p['description']),
-                        );
-                      },
-                    )
-                  : Column(
-                      children: [
-                        const SizedBox(height: 20),
-                        _suggestionItem('Mysore Railway Station', 'Pedestrian Overpass, Medar Block...'),
-                        _suggestionItem('1 New Kantharaj Urs Rd', 'CFTRI Layout Sharad...'),
-                      ],
-                    ),
-            ),
-
-            // ── BOTTOM BUTTONS
+            // ── BOTTOM BUTTONS (FIXED AT BOTTOM)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 60), // Added bottom padding to move button up
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   TextButton.icon(
                     onPressed: () => setState(() {
@@ -1239,12 +1321,13 @@ class _HomeScreenState extends State<HomeScreen>
       title: Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
       onTap: () {
-        if (_pickupController.text.isEmpty) {
+        if (_activeField == 'pickup') {
           _pickupController.text = title;
         } else {
           _dropController.text = title;
         }
-        setState(() {});
+        setState(() => _predictions.clear());
+        _updateMapRoute();
       },
     );
   }

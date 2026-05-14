@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_animarker/flutter_animarker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:golorry_customer_app/providers/tracking_provider.dart';
 import 'package:golorry_customer_app/models/booking_model.dart';
-import 'package:golorry_customer_app/services/map_camera_service.dart';
+import 'package:golorry_customer_app/screens/map_screen.dart';
 import 'package:golorry_customer_app/utils/app_colors.dart';
 import 'package:golorry_customer_app/utils/marker_helper.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
   final BookingModel booking;
-  final String apiKey;
 
   const LiveTrackingScreen({
     super.key,
     required this.booking,
-    required this.apiKey,
   });
 
   @override
@@ -26,109 +23,90 @@ class LiveTrackingScreen extends StatefulWidget {
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   GoogleMapController? _mapController;
   BitmapDescriptor? _truckIcon;
+  BitmapDescriptor? _destinationIcon;
 
   @override
   void initState() {
     super.initState();
-    _loadAssets();
+    _loadMarkers();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<TrackingProvider>();
       
-      print('DEBUG [LiveTrackingScreen]: Starting Live Tracking for Booking ${widget.booking.id}');
+      // Get destination LatLng from booking or geocode it
+      // For now, assuming we have a way to get it. 
+      // In a real app, BookingModel should have pickup/drop LatLng.
+      // If not, we'd geocode it here once.
+      // For this "fresh" implementation, I'll use a placeholder or 
+      // better, I'll assume the provider will handle it if we pass addresses.
+      // But LatLng is better.
       
-      // Use destination from BookingModel if available, otherwise use a fallback for testing
-      // but ensure it's logged clearly.
-      final LatLng destination = LatLng(12.9352, 77.6245); // This should ideally come from widget.booking
-      
-      print('DEBUG [LiveTrackingScreen]: Tracking to destination: $destination');
+      // Temporary: using a static LatLng for demonstration of road-following
+      final LatLng destination = const LatLng(12.9352, 77.6245); 
 
-      provider.startTracking(
-        widget.booking.id,
-        widget.apiKey,
-        destination,
-      );
-      
-      provider.addListener(_onTrackingUpdate);
+      provider.startTracking(widget.booking.id, destination);
     });
   }
 
-  void _onTrackingUpdate() {
-    if (!mounted) return;
-    final tracking = context.read<TrackingProvider>();
-    
-    print('DEBUG [LiveTrackingScreen]: Provider update received. Polylines: ${tracking.polylines.length}');
-    
-    if (tracking.driverLocation != null && _mapController != null) {
-      MapCameraService.followDriver(
-        controller: _mapController,
-        driverPos: tracking.driverLocation!,
-        heading: tracking.driverHeading,
-      );
-    }
-  }
-
-  Future<void> _loadAssets() async {
+  Future<void> _loadMarkers() async {
     _truckIcon = await MarkerHelper.getTruckMarker();
-    setState(() {});
+    _destinationIcon = await MarkerHelper.getCustomMarker(Icons.location_on, Colors.red);
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    // 7. Render ALL decoded coordinates in GoogleMap Polyline
-    return Consumer<TrackingProvider>(
-      builder: (context, tracking, child) {
-        print('DEBUG UI: Rendering ${tracking.polylines.length} polylines');
-        if (tracking.polylines.isNotEmpty) {
-          final polyline = tracking.polylines.first;
-          print('DEBUG UI: Polyline ID: ${polyline.polylineId}, Points: ${polyline.points.length}');
-        }
+    return Scaffold(
+      body: Consumer<TrackingProvider>(
+        builder: (context, tracking, child) {
+          final driverLoc = tracking.driverLocation;
+          
+          print('DEBUG [LiveTrackingScreen]: UI Update. Driver Loc: $driverLoc, Polylines: ${tracking.polylines.length}');
+          if (tracking.polylines.isNotEmpty) {
+            print('DEBUG [LiveTrackingScreen]: Active Polyline ID: ${tracking.polylines.first.polylineId.value}, Points: ${tracking.polylines.first.points.length}');
+          }
 
-        return Scaffold(
-          body: Stack(
+          if (driverLoc == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Auto-follow logic
+          if (_mapController != null) {
+            _mapController!.animateCamera(CameraUpdate.newLatLng(driverLoc));
+          }
+
+          return Stack(
             children: [
-              // 1. Map Layer with Animarker
-              if (tracking.driverLocation != null)
-                Animarker(
-                  curve: Curves.easeInOut,
-                  duration: const Duration(milliseconds: 2000),
-                  mapId: Future.value(_mapController?.mapId ?? 0),
-                  markers: {
-                    Marker(
-                      markerId: const MarkerId('driver'),
-                      position: tracking.driverLocation!,
-                      icon: _truckIcon ?? BitmapDescriptor.defaultMarker,
-                      rotation: tracking.driverHeading,
-                      anchor: const Offset(0.5, 0.5),
-                    ),
-                  },
-                  child: GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: tracking.driverLocation!,
-                      zoom: 17,
-                      tilt: 45,
-                    ),
-                    onMapCreated: (controller) {
-                      _mapController = controller;
-                      _mapController?.setMapStyle(_silverMapStyle);
-                    },
-                    // 9. Connected correctly to provider polylines
-                    polylines: tracking.polylines,
-                    zoomControlsEnabled: false,
-                    myLocationButtonEnabled: false,
-                    compassEnabled: false,
-                    mapType: MapType.normal,
+              MapScreen(
+                initialPosition: driverLoc,
+                isLiveTracking: true,
+                driverLocation: driverLoc,
+                driverHeading: tracking.driverHeading,
+                polylines: tracking.polylines,
+                markers: {
+                  Marker(
+                    markerId: const MarkerId('driver'),
+                    position: driverLoc,
+                    icon: _truckIcon ?? BitmapDescriptor.defaultMarker,
+                    rotation: tracking.driverHeading,
+                    anchor: const Offset(0.5, 0.5),
                   ),
-                )
-              else
-                const Center(child: CircularProgressIndicator()),
+                  if (tracking.polylines.isNotEmpty)
+                    Marker(
+                      markerId: const MarkerId('destination'),
+                      position: tracking.polylines.first.points.last,
+                      icon: _destinationIcon ?? BitmapDescriptor.defaultMarker,
+                    ),
+                },
+                onMapCreated: (controller) => _mapController = controller,
+              ),
 
               _buildHeader(context),
               _buildBottomPanel(tracking),
             ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -157,7 +135,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+          boxShadow: [const BoxShadow(color: Colors.black12, blurRadius: 20)],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -236,6 +214,4 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       child: Text('On the way', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12)),
     );
   }
-
-  static const String _silverMapStyle = '[{"elementType":"geometry","stylers":[{"color":"#f5f5f5"}]},{"elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},{"elementType":"labels.text.stroke","stylers":[{"color":"#f5f5f5"}]},{"featureType":"administrative.land_parcel","elementType":"labels.text.fill","stylers":[{"color":"#bdbdbd"}]},{"featureType":"poi","elementType":"geometry","stylers":[{"color":"#eeeeee"}]},{"featureType":"poi","elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},{"featureType":"road","elementType":"geometry","stylers":[{"color":"#ffffff"}]},{"featureType":"road.arterial","elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},{"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#dadada"}]},{"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},{"featureType":"road.local","elementType":"labels.text.fill","stylers":[{"color":"#9e9e9e"}]},{"featureType":"water","elementType":"geometry","stylers":[{"color":"#c9c9c9"}]},{"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#9e9e9e"}]}]';
 }

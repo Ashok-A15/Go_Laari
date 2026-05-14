@@ -48,7 +48,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final isDark = AppColors.isDark;
         final navBgColor = isDark ? const Color(0xFF132548).withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.9);
 
+        final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+
         return Scaffold(
+          resizeToAvoidBottomInset: false, // Map should not resize
           backgroundColor: AppColors.background,
           body: Stack(
             children: [
@@ -65,41 +68,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
               // ── PREMIUM FLOATING DOCK ────────────────────
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 24,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(30),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: navBgColor,
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _navItem(0, Icons.grid_view_rounded, 'Home', isDark),
-                          _navItem(1, Icons.local_shipping_rounded, 'Orders', isDark),
-                          _navItem(2, Icons.person_outline_rounded, 'Profile', isDark),
-                          _navItem(3, Icons.auto_awesome_rounded, 'AI Assistant', isDark),
-                        ],
+              if (!isKeyboardOpen)
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 24,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: navBgColor,
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _navItem(0, Icons.grid_view_rounded, 'Home', isDark),
+                            _navItem(1, Icons.local_shipping_rounded, 'Orders', isDark),
+                            _navItem(2, Icons.person_outline_rounded, 'Profile', isDark),
+                            _navItem(3, Icons.auto_awesome_rounded, 'AI Assistant', isDark),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         );
