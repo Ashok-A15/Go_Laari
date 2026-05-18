@@ -11,15 +11,17 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  // Force Legacy Maps Renderer & Hybrid Composition (AndroidViewSurface) to completely resolve green/blank map rendering bugs on low-end hardware
+  // Configure Google Maps for absolute stability across all Android devices (from budget A015 to modern Pixel devices):
+  // 1. Disable useAndroidViewSurface (set to false) to use Texture Layer Composition. This is crucial for performance and prevents green/blank screen crashes when the map is overlaid with Flutter widgets (like collapsible sheets).
+  // 2. Initialize with AndroidMapRenderer.latest to leverage modern hardware acceleration on Android 12+ and Pixel devices.
   final GoogleMapsFlutterPlatform mapsImplementation = GoogleMapsFlutterPlatform.instance;
   if (mapsImplementation is GoogleMapsFlutterAndroid) {
-    mapsImplementation.useAndroidViewSurface = true;
+    mapsImplementation.useAndroidViewSurface = false;
     try {
-      await mapsImplementation.initializeWithRenderer(AndroidMapRenderer.legacy);
-      debugPrint('DEBUG [Maps]: Successfully initialized Google Maps with Renderer.legacy');
+      await mapsImplementation.initializeWithRenderer(AndroidMapRenderer.latest);
+      debugPrint('DEBUG [Maps]: Successfully initialized Google Maps with Renderer.latest');
     } catch (e) {
-      debugPrint('DEBUG [Maps]: Legacy renderer initialization skipped or already initialized: $e');
+      debugPrint('DEBUG [Maps]: Latest renderer initialization skipped or already initialized: $e');
     }
   }
 
