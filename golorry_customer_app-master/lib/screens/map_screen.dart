@@ -17,6 +17,8 @@ class MapScreen extends StatefulWidget {
   final bool? isLiveTracking;
   final LatLng? driverLocation;
   final double? driverHeading;
+  final MapType mapType;
+  final bool trafficEnabled;
 
   const MapScreen({
     super.key,
@@ -28,6 +30,8 @@ class MapScreen extends StatefulWidget {
     this.isLiveTracking,
     this.driverLocation,
     this.driverHeading,
+    this.mapType = MapType.normal,
+    this.trafficEnabled = false,
   });
 
   @override
@@ -287,7 +291,8 @@ class _MapScreenState extends State<MapScreen> {
                 polylines: allPolylines,
                 myLocationEnabled: true,
                 myLocationButtonEnabled: true,
-                mapType: MapType.normal,
+                mapType: widget.mapType,
+                trafficEnabled: widget.trafficEnabled,
               ),
             ),
     );

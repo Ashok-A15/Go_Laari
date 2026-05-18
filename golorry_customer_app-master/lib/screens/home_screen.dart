@@ -60,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen>
   // ── BOOKING WORKFLOW STATE ────────────────────
   bool _isSearching = false;
   MapType _currentMapType = MapType.normal;
+  bool _trafficEnabled = false;
   String? _pickupAddress;
   String? _dropAddress;
   final _pickupController = TextEditingController();
@@ -617,11 +618,17 @@ class _HomeScreenState extends State<HomeScreen>
           return Stack(
             children: [
               // ── BACKGROUND MAP ───────────────────────────
-              Positioned.fill(
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: -30,
                 child: MapScreen(
                   initialPosition: _currentPosition,
                   markers: _markers.union(_driverMarkers),
                   polylines: _polylines,
+                  mapType: _currentMapType,
+                  trafficEnabled: _trafficEnabled,
                   onMapCreated: (c) => _mapController = c,
                 ),
               ),
@@ -652,16 +659,8 @@ class _HomeScreenState extends State<HomeScreen>
                   child: Column(
                     children: [
                       _mapActionBtn(
-                        icon: _currentMapType == MapType.normal
-                            ? Icons.layers_rounded
-                            : Icons.map_rounded,
-                        onTap: () {
-                          setState(() {
-                            _currentMapType = _currentMapType == MapType.normal
-                                ? MapType.satellite
-                                : MapType.normal;
-                          });
-                        },
+                        icon: Icons.layers_rounded,
+                        onTap: () => _showMapTypeBottomSheet(context),
                       ),
                       const SizedBox(height: 12),
                       _mapActionBtn(
@@ -817,7 +816,11 @@ class _HomeScreenState extends State<HomeScreen>
     
     return Stack(
       children: [
-        Positioned.fill(
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: -30,
           child: MapScreen(
             initialPosition: _trackingPickup,
             markers: {
@@ -847,6 +850,8 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
             },
             polylines: _polylines,
+            mapType: _currentMapType,
+            trafficEnabled: _trafficEnabled,
             onMapCreated: (c) {
               _mapController = c;
               if (_trackingPickup != null && _trackingDrop != null) {
@@ -869,12 +874,8 @@ class _HomeScreenState extends State<HomeScreen>
           child: Column(
             children: [
               _mapActionBtn(
-                icon: _currentMapType == MapType.normal ? Icons.layers_rounded : Icons.map_rounded,
-                onTap: () {
-                  setState(() {
-                    _currentMapType = _currentMapType == MapType.normal ? MapType.satellite : MapType.normal;
-                  });
-                },
+                icon: Icons.layers_rounded,
+                onTap: () => _showMapTypeBottomSheet(context),
               ),
               const SizedBox(height: 12),
               _mapActionBtn(
@@ -1060,6 +1061,153 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  void _showMapTypeBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final isDark = AppColors.isDark;
+            final bgColor = isDark ? const Color(0xFF1E2028) : Colors.white;
+            final textCol = isDark ? Colors.white : Colors.black87;
+            final textColSecondary = isDark ? Colors.white70 : Colors.black54;
+
+            Widget _optionItem({
+              required String label,
+              required IconData icon,
+              required bool isSelected,
+              required VoidCallback onTap,
+            }) {
+              final activeColor = const Color(0xFF2DD4BF);
+              final activeBgColor = activeColor.withValues(alpha: 0.12);
+              final inactiveBgColor = isDark ? const Color(0xFF2D313E) : const Color(0xFFF3F4F6);
+
+              return GestureDetector(
+                onTap: onTap,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: isSelected ? activeBgColor : inactiveBgColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? activeColor : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: isSelected ? activeColor : textColSecondary,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? activeColor : textCol,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Map type',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: textCol,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: textColSecondary),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _optionItem(
+                        label: 'Default',
+                        icon: Icons.map_outlined,
+                        isSelected: _currentMapType == MapType.normal,
+                        onTap: () {
+                          setState(() => _currentMapType = MapType.normal);
+                          setModalState(() {});
+                        },
+                      ),
+                      _optionItem(
+                        label: 'Satellite',
+                        icon: Icons.satellite_alt_rounded,
+                        isSelected: _currentMapType == MapType.satellite,
+                        onTap: () {
+                          setState(() => _currentMapType = MapType.satellite);
+                          setModalState(() {});
+                        },
+                      ),
+                      _optionItem(
+                        label: 'Terrain',
+                        icon: Icons.terrain_rounded,
+                        isSelected: _currentMapType == MapType.terrain,
+                        onTap: () {
+                          setState(() => _currentMapType = MapType.terrain);
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Divider(color: isDark ? Colors.white10 : Colors.black12, height: 1),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Map details',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: textCol,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _optionItem(
+                    label: 'Traffic',
+                    icon: Icons.traffic_rounded,
+                    isSelected: _trafficEnabled,
+                    onTap: () {
+                      setState(() => _trafficEnabled = !_trafficEnabled);
+                      setModalState(() {});
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _mapActionBtn({required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -1119,6 +1267,7 @@ class _HomeScreenState extends State<HomeScreen>
               _dropController.clear();
               _pickupAddress = '';
               _dropAddress = '';
+              _activeField = 'pickup';
             });
           },
           child: Container(
@@ -1209,7 +1358,12 @@ class _HomeScreenState extends State<HomeScreen>
                                 onPressed: _determinePosition,
                               ),
                               onChanged: (v) => _fetchSuggestions(v, true),
-                              onFocusChange: (f) => setState(() => _pickupFocused = f),
+                              onFocusChange: (f) {
+                                setState(() {
+                                  _pickupFocused = f;
+                                  if (f) _activeField = 'pickup';
+                                });
+                              },
                             ),
                             Divider(height: 1, indent: 48, color: AppColors.border),
                             _inputRow(
@@ -1218,7 +1372,12 @@ class _HomeScreenState extends State<HomeScreen>
                               icon: Icons.location_on_rounded,
                               iconColor: AppColors.error,
                               onChanged: (v) => _fetchSuggestions(v, false),
-                              onFocusChange: (f) => setState(() => _dropFocused = f),
+                              onFocusChange: (f) {
+                                setState(() {
+                                  _dropFocused = f;
+                                  if (f) _activeField = 'drop';
+                                });
+                              },
                             ),
                           ],
                         ),
@@ -1247,14 +1406,6 @@ class _HomeScreenState extends State<HomeScreen>
                             onTap: () => _onSuggestionSelected(p['description']),
                           );
                         },
-                      )
-                    else if (_predictions.isEmpty)
-                      Column(
-                        children: [
-                          const SizedBox(height: 10),
-                          _suggestionItem('Mysore Railway Station', 'Pedestrian Overpass, Medar Block...'),
-                          _suggestionItem('1 New Kantharaj Urs Rd', 'CFTRI Layout Sharad...'),
-                        ],
                       ),
                     
                     const SizedBox(height: 20),
@@ -1265,7 +1416,7 @@ class _HomeScreenState extends State<HomeScreen>
 
             // ── BOTTOM BUTTONS (FIXED AT BOTTOM)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1324,23 +1475,6 @@ class _HomeScreenState extends State<HomeScreen>
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
-    );
-  }
-
-  Widget _suggestionItem(String title, String subtitle) {
-    return ListTile(
-      leading: const Icon(Icons.history_rounded, size: 20),
-      title: Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
-      onTap: () {
-        if (_activeField == 'pickup') {
-          _pickupController.text = title;
-        } else {
-          _dropController.text = title;
-        }
-        setState(() => _predictions.clear());
-        _updateMapRoute();
-      },
     );
   }
 
