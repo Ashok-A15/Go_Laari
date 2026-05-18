@@ -88,11 +88,6 @@ class _HomeScreenState extends State<HomeScreen>
   String? _driverLorryNo;
   String? _driverLorryModel;
 
-  // ── DISPOSE GUARD ────────────────────────────────
-  bool _disposed = false;
-  bool get _isMounted => mounted && !_disposed;
-  void _safeSetState(VoidCallback fn) { if (_isMounted) setState(fn); }
-
   void _fetchDriverDetails(String driverId) async {
     if (_loadedDriverId == driverId) return;
     _loadedDriverId = driverId;
@@ -167,7 +162,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
-    _disposed = true;
     _animController.dispose();
     _pickupController.dispose();
     _dropController.dispose();
@@ -938,7 +932,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildActiveTrackingState(BookingModel booking) {
     // ── ALL side effects go into post-frame callbacks, NEVER directly in build()
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isMounted) return;
+      if (!mounted) return;
 
       // Fetch driver details (cached, won't duplicate)
       if (booking.driverId != null) {
