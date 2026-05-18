@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-import 'package:golorry_customer_app/screens/auth_gate.dart';
+import 'package:golorry_customer_app/screens/splash_screen.dart';
 import 'package:golorry_customer_app/utils/app_colors.dart';
 
 void main() async {
@@ -71,7 +71,7 @@ class GoLorryApp extends StatelessWidget {
             textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
             scaffoldBackgroundColor: const Color(0xFF0F172A),
           ),
-          home: const AuthGate(),
+          home: const SplashScreen(),
         );
       },
     );
