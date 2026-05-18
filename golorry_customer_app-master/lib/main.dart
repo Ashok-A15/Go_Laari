@@ -2,12 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
+import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'package:golorry_customer_app/screens/auth_gate.dart';
 import 'package:golorry_customer_app/utils/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  // Force Legacy Maps Renderer & Hybrid Composition (AndroidViewSurface) to completely resolve green/blank map rendering bugs on low-end hardware
+  final GoogleMapsFlutterPlatform mapsImplementation = GoogleMapsFlutterPlatform.instance;
+  if (mapsImplementation is GoogleMapsFlutterAndroid) {
+    mapsImplementation.useAndroidViewSurface = true;
+    try {
+      await mapsImplementation.initializeWithRenderer(AndroidMapRenderer.legacy);
+      debugPrint('DEBUG [Maps]: Successfully initialized Google Maps with Renderer.legacy');
+    } catch (e) {
+      debugPrint('DEBUG [Maps]: Legacy renderer initialization skipped or already initialized: $e');
+    }
+  }
 
   // Initialise color values for the default theme (dark) immediately
   AppColors.init();
