@@ -6,8 +6,9 @@ import 'dart:async';
 import '../widgets/owner_map.dart';
 import '../services/firestore_service.dart';
 import 'available_jobs_page.dart';
-import 'tracking_page.dart';
 import 'live_tracking_page.dart';
+import 'notification_settings_page.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -27,6 +28,11 @@ class _DashboardPageState extends State<DashboardPage>
   StreamSubscription? _jobSubscription;
   bool _hasNewJobAlert = false;
   Map<String, dynamic> _fleetStats = {'total': 0, 'active': 0, 'idle': 0, 'earnings': 0.0};
+  
+  // Map Type and Controls
+  MapType _currentMapType = MapType.normal;
+  bool _trafficEnabled = false;
+  final GlobalKey<OwnerMapState> _mapKey = GlobalKey<OwnerMapState>();
 
   late AnimationController _animController;
 
@@ -162,15 +168,18 @@ class _DashboardPageState extends State<DashboardPage>
     return Scaffold(
       extendBody: true,
       backgroundColor: isDark ? const Color(0xFF0F171A) : const Color(0xFFF8FAF9),
-      appBar: null,
       body: Stack(
         children: [
           // 1. Full Screen Map
-          const Positioned.fill(
-            child: OwnerMap(),
+          Positioned.fill(
+            child: OwnerMap(
+              key: _mapKey,
+              mapType: _currentMapType,
+              trafficEnabled: _trafficEnabled,
+            ),
           ),
 
-          // 2. Floating Header Card (Matching Bottom Style)
+          // 2. Floating Header Card
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 15,
@@ -180,16 +189,9 @@ class _DashboardPageState extends State<DashboardPage>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isDark 
-                    ? const Color(0xFF1E272E).withOpacity(0.9) 
-                    : Colors.white.withOpacity(0.9),                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
+                  color: isDark ? const Color(0xFF1E272E).withOpacity(0.9) : Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))],
                 ),
                 child: Row(
                   children: [
@@ -235,7 +237,7 @@ class _DashboardPageState extends State<DashboardPage>
                               child: Switch(
                                 value: _isOnline,
                                 activeColor: const Color(0xFF43CEA2),
-                                onChanged: _toggleOnlineStatus,
+                                onChanged: (val) => _toggleOnlineStatus(val),
                               ),
                             ),
                           ),
@@ -245,7 +247,7 @@ class _DashboardPageState extends State<DashboardPage>
                     ],
                     IconButton(
                       icon: const Icon(Icons.notifications_none_rounded, size: 20),
-                      onPressed: () {},
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsPage())),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
@@ -255,62 +257,47 @@ class _DashboardPageState extends State<DashboardPage>
             ),
           ),
 
-          // 2. Top UI Elements (Stats for Owner)
+          // 3. Stats (Owner Only)
           if (_isOwner)
             Positioned(
-              top: 20,
+              top: MediaQuery.of(context).padding.top + 80,
               left: 20,
               right: 20,
               child: FadeTransition(
                 opacity: _animController,
-                child: Column(
-                  children: [
-                    SizedBox(
-                      height: 100,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _statCard("${_fleetStats['total']}", "Total", Icons.local_shipping_rounded, 
-                              [const Color(0xFF6dd5ed), const Color(0xFF2193b0)]),
-                          _statCard("${_fleetStats['active']}", "Active", Icons.play_arrow_rounded, 
-                              [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
-                          _statCard("${_fleetStats['idle']}", "Idle", Icons.pause_circle_rounded, 
-                              [const Color(0xFFff9966), const Color(0xFFff5e62)]),
-                        ],
-                      ),
-                    ),
-                  ],
+                child: SizedBox(
+                  height: 100,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _statCard("${_fleetStats['total']}", "Total", Icons.local_shipping_rounded, [const Color(0xFF6dd5ed), const Color(0xFF2193b0)]),
+                      _statCard("${_fleetStats['active']}", "Active", Icons.play_arrow_rounded, [const Color(0xFF43CEA2), const Color(0xFF185A9D)]),
+                      _statCard("${_fleetStats['idle']}", "Idle", Icons.pause_circle_rounded, [const Color(0xFFff9966), const Color(0xFFff5e62)]),
+                    ],
+                  ),
                 ),
               ),
             ),
 
-          // 2.5 New Job Alert Banner
+          // 4. Job Alert Banner
           if (_hasNewJobAlert && !_isOwner)
             Positioned(
               top: MediaQuery.of(context).padding.top + 90,
               left: 20,
               right: 20,
               child: GestureDetector(
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
-                },
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage())),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF43CEA2),
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF43CEA2).withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(color: const Color(0xFF43CEA2).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
                   child: const Row(
                     children: [
                       Icon(Icons.notifications_active, color: Colors.white, size: 20),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           "New Job Available! Tap to view",
@@ -324,7 +311,20 @@ class _DashboardPageState extends State<DashboardPage>
               ),
             ),
 
-          // 3. Floating Quick Info for Driver
+          // 5. Map Controls
+          Positioned(
+            right: 15,
+            bottom: _isOwner ? 100 : 200,
+            child: Column(
+              children: [
+                _mapControlButton(isDark: isDark, icon: Icons.layers_rounded, onTap: _showMapTypeSelector),
+                const SizedBox(height: 12),
+                _mapControlButton(isDark: isDark, icon: Icons.my_location_rounded, onTap: () => _mapKey.currentState?.animateToCurrentLocation()),
+              ],
+            ),
+          ),
+
+          // 6. Bottom Info Panel (Driver Only)
           if (!_isOwner)
             Positioned(
               bottom: 120,
@@ -346,9 +346,7 @@ class _DashboardPageState extends State<DashboardPage>
                         decoration: BoxDecoration(
                           color: const Color(0xFF185A9D),
                           borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5)),
-                          ],
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))],
                         ),
                         child: Row(
                           children: [
@@ -365,12 +363,7 @@ class _DashboardPageState extends State<DashboardPage>
                               ),
                             ),
                             ElevatedButton(
-                              onPressed: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => LiveTrackingPage(
-                                  bookingId: bookingDoc.id,
-                                  bookingData: bookingData,
-                                )));
-                              },
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveTrackingPage(bookingId: bookingDoc.id, bookingData: bookingData))),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white,
                                 foregroundColor: const Color(0xFF185A9D),
@@ -389,9 +382,7 @@ class _DashboardPageState extends State<DashboardPage>
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF1E272E).withOpacity(0.9) : Colors.white.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5)),
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -401,13 +392,11 @@ class _DashboardPageState extends State<DashboardPage>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text("Status: ${_isOnline ? 'Online' : 'Offline'}", style: TextStyle(fontWeight: FontWeight.bold, color: _isOnline ? Colors.green : Colors.grey)),
-                              Text(_isOnline ? "Waiting for new jobs..." : "Go online to see jobs", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              Text(_isOnline ? "Waiting for new jobs..." : "Go online to see jobs", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                             ],
                           ),
                           ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage()));
-                            },
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AvailableJobsPage())),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF43CEA2),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -417,7 +406,7 @@ class _DashboardPageState extends State<DashboardPage>
                         ],
                       ),
                     );
-                  }
+                  },
                 ),
               ),
             ),
@@ -432,19 +421,9 @@ class _DashboardPageState extends State<DashboardPage>
       margin: const EdgeInsets.only(right: 15),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: LinearGradient(colors: gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: gradient[1].withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: gradient[1].withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,23 +433,132 @@ class _DashboardPageState extends State<DashboardPage>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              Text(
-                title,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 13,
-                ),
-              ),
+              Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(title, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13)),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mapControlButton({required bool isDark, required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 45,
+        width: 45,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E272E) : Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Icon(icon, color: const Color(0xFF185A9D), size: 20),
+      ),
+    );
+  }
+
+  void _showMapTypeSelector() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E272E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Map type", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _mapTypeItem(setSheetState, "Default", MapType.normal),
+                  _mapTypeItem(setSheetState, "Satellite", MapType.satellite),
+                  _mapTypeItem(setSheetState, "Terrain", MapType.terrain),
+                ],
+              ),
+              const SizedBox(height: 30),
+              const Text("Map details", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Row(children: [_mapDetailItem(setSheetState, "Traffic", Icons.traffic_rounded, _trafficEnabled)]),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mapTypeItem(StateSetter setSheetState, String label, MapType type) {
+    final isSelected = _currentMapType == type;
+    return GestureDetector(
+      onTap: () {
+        setSheetState(() => _currentMapType = type);
+        setState(() => _currentMapType = type);
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: isSelected ? const Color(0xFF43CEA2).withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+              border: Border.all(color: isSelected ? const Color(0xFF43CEA2) : Colors.transparent, width: 3),
+            ),
+            child: Icon(
+              type == MapType.satellite ? Icons.satellite_alt_rounded : (type == MapType.terrain ? Icons.terrain_rounded : Icons.map_rounded),
+              color: isSelected ? const Color(0xFF43CEA2) : Colors.grey,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12, 
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, 
+              color: isSelected ? const Color(0xFF43CEA2) : Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mapDetailItem(StateSetter setSheetState, String label, IconData icon, bool enabled) {
+    return GestureDetector(
+      onTap: () {
+        setSheetState(() => _trafficEnabled = !enabled);
+        setState(() => _trafficEnabled = !enabled);
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: enabled ? const Color(0xFF43CEA2).withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: enabled ? const Color(0xFF43CEA2) : Colors.transparent, width: 2),
+            ),
+            child: Icon(icon, color: enabled ? const Color(0xFF43CEA2) : Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 11)),
         ],
       ),
     );

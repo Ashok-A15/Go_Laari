@@ -70,10 +70,41 @@ class _HomeScreenState extends State<HomeScreen>
   bool _dropFocused = false;
   int? _totalDistanceMeters;
   
+  // ── PANEL STATE ───────────────────────────────
+  final ValueNotifier<double> _panelHeightNotifier = ValueNotifier<double>(0.3);
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
+
+  
   // ── OPTIMIZATION: CACHED STREAMS ────────────────
   late Stream<BookingModel?> _activeBookingStream;
   StreamSubscription? _driversAroundSub;
   Set<Marker> _driverMarkers = {};
+
+  // ── DRIVER DETAILS CACHE ────────────────────────
+  String? _loadedDriverId;
+  String? _driverName;
+  String? _driverPhone;
+  String? _driverLorryNo;
+  String? _driverLorryModel;
+
+  void _fetchDriverDetails(String driverId) async {
+    if (_loadedDriverId == driverId) return;
+    _loadedDriverId = driverId;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('drivers').doc(driverId).get();
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        setState(() {
+          _driverName = data?['name'] ?? 'Driver';
+          _driverPhone = data?['phone'] ?? '';
+          _driverLorryNo = data?['vehicleNo'] ?? data?['lorryNo'] ?? 'MH-12-AB-1234';
+          _driverLorryModel = data?['vehicleModel'] ?? data?['lorryModel'] ?? 'Tata Ace Lorry';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching driver details: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -241,68 +272,17 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _setCustomMarker() async {
     try {
-      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(pictureRecorder);
-      const double size = 80.0;
-      
-      final Paint bodyPaint = Paint()
-        ..color = const Color(0xFFE53935)
-        ..style = PaintingStyle.fill;
-
-      final Paint cabinPaint = Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill;
-
-      final Paint detailPaint = Paint()
-        ..color = const Color(0xFF37474F).withOpacity(0.8)
-        ..style = PaintingStyle.fill;
-
-      final Paint shadowPaint = Paint()
-        ..color = Colors.black.withOpacity(0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25 + 2, size * 0.1 + 2, size * 0.5, size * 0.8),
-          const Radius.circular(4),
-        ),
-        shadowPaint,
+      final icon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(120, 120)),
+        'assets/lorry_3d.png',
       );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
-          const Radius.circular(2),
-        ),
-        bodyPaint,
-      );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
-          const Radius.circular(6),
-        ),
-        cabinPaint,
-      );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.3, size * 0.12, size * 0.4, size * 0.08),
-          const Radius.circular(1),
-        ),
-        detailPaint,
-      );
-
-      final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
-      final data = await img.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (mounted && data != null) {
+      if (mounted) {
         setState(() {
-          _laariIcon = BitmapDescriptor.bytes(data.buffer.asUint8List());
+          _laariIcon = icon;
         });
       }
     } catch (e) {
-      debugPrint("Error generating custom marker: $e");
+      debugPrint("Error loading custom 3d marker: $e");
     }
   }
 
@@ -462,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen>
       destination: dLatLng,
     );
 
-    if (result != null && mounted) {
+    if (result != null && mounted && _isSearching) {
       setState(() {
         _polylines = {
           Polyline(
@@ -604,17 +584,24 @@ class _HomeScreenState extends State<HomeScreen>
         builder: (context, snapshot) {
           final activeBooking = snapshot.data;
 
-          if (activeBooking != null) {
-            // If we have an active booking, reset search state to prevent glitches
-            if (_isSearching) {
+            if (activeBooking != null) {
+              // If we have an active booking, reset search state to prevent glitches
+              if (_isSearching) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _isSearching = false);
+                });
+              }
+              return _buildActiveTrackingState(activeBooking);
+            }
+
+            // If no active booking, but we had one before, clear the map state
+            if (_lastBookingId != null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _isSearching = false);
+                _clearMapState();
               });
             }
-            return _buildActiveTrackingState(activeBooking);
-          }
 
-          return Stack(
+            return Stack(
             children: [
               // ── BACKGROUND MAP ───────────────────────────
               Positioned.fill(
@@ -672,6 +659,7 @@ class _HomeScreenState extends State<HomeScreen>
                       _mapActionBtn(
                         icon: Icons.refresh_rounded,
                         onTap: () {
+                          _clearMapState();
                           _loadData();
                           _determinePosition();
                         },
@@ -759,18 +747,42 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _updateTrackingRoute(BookingModel booking) async {
+    final currentBookingId = booking.id;
+    
     final geo = GeocodingService(MapConstants.googleMapsApiKey);
     final pCoord = await geo.getCoordinates(booking.pickupAddress);
     final dCoord = await geo.getCoordinates(booking.dropAddress);
 
     if (pCoord == null || dCoord == null) return;
 
+    LatLng? origin;
+    LatLng? destination;
+
+    final status = booking.status.toLowerCase();
+    if (status == 'accepted' || status == 'loading_started' || status == 'loading_completed') {
+      if (booking.driverLocation != null) {
+        origin = LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude);
+        destination = pCoord;
+      } else {
+        origin = pCoord;
+        destination = pCoord;
+      }
+    } else if (status == 'in_transit' || status == 'in transit') {
+      origin = pCoord;
+      destination = dCoord;
+    } else {
+      origin = pCoord;
+      destination = dCoord;
+    }
+
     final result = await DirectionsService().getDirections(
-      origin: pCoord,
-      destination: dCoord,
+      origin: origin,
+      destination: destination,
     );
 
-    if (result != null && mounted) {
+    // CRITICAL: Check if we are still tracking this specific booking
+    // and if the user hasn't already cleared the map.
+    if (result != null && mounted && _lastBookingId == currentBookingId) {
       setState(() {
         _trackingPickup = pCoord;
         _trackingDrop = dCoord;
@@ -790,6 +802,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildActiveTrackingState(BookingModel booking) {
+    if (booking.driverId != null) {
+      _fetchDriverDetails(booking.driverId!);
+    }
+
     if (_lastBookingId != booking.id || 
         _lastStatus != booking.status || 
         (_lastPolylineUpdate == null || DateTime.now().difference(_lastPolylineUpdate!).inSeconds > 60)) {
@@ -799,7 +815,7 @@ class _HomeScreenState extends State<HomeScreen>
        _lastPolylineUpdate = DateTime.now();
     }
     
-    // Auto-follow driver
+    // Auto-follow driver & update route if location changes
     if (booking.driverLocation != null) {
       final currentDriverPos = LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude);
       if (_lastDriverLatLng == null || 
@@ -809,6 +825,10 @@ class _HomeScreenState extends State<HomeScreen>
         _lastDriverLatLng = currentDriverPos;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _mapController?.animateCamera(CameraUpdate.newLatLng(currentDriverPos));
+          final status = booking.status.toLowerCase();
+          if (status == 'accepted' || status == 'loading_started' || status == 'loading_completed') {
+            _updateTrackingRoute(booking);
+          }
         });
       }
     }
@@ -817,49 +837,56 @@ class _HomeScreenState extends State<HomeScreen>
     
     return Stack(
       children: [
-        Positioned.fill(
-          child: MapScreen(
-            initialPosition: _trackingPickup,
-            markers: {
-              if (_trackingPickup != null)
-                Marker(
-                  markerId: const MarkerId('pickup'),
-                  position: _trackingPickup!,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
-                  infoWindow: InfoWindow(title: 'Pickup Point', snippet: booking.pickupAddress),
-                ),
-              if (_trackingDrop != null)
-                Marker(
-                  markerId: const MarkerId('drop'),
-                  position: _trackingDrop!,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                  infoWindow: InfoWindow(title: 'Destination', snippet: booking.dropAddress),
-                ),
-              if (booking.driverLocation != null)
-                Marker(
-                  markerId: const MarkerId('driver'),
-                  position: LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude),
-                  rotation: booking.driverHeading ?? 0.0,
-                  icon: _laariIcon,
-                  anchor: const Offset(0.5, 0.5),
-                  infoWindow: const InfoWindow(title: 'Lorry Location'),
-                  zIndex: 2,
-                ),
-            },
-            polylines: _polylines,
-            onMapCreated: (c) {
-              _mapController = c;
-              if (_trackingPickup != null && _trackingDrop != null) {
-                LatLngBounds bounds;
-                if (_trackingPickup!.latitude > _trackingDrop!.latitude) {
-                  bounds = LatLngBounds(southwest: _trackingDrop!, northeast: _trackingPickup!);
-                } else {
-                  bounds = LatLngBounds(southwest: _trackingPickup!, northeast: _trackingDrop!);
-                }
-                c.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
-              }
-            },
-          ),
+        ValueListenableBuilder<double>(
+          valueListenable: _panelHeightNotifier,
+          builder: (context, heightFactor, child) {
+            return Positioned.fill(
+              child: MapScreen(
+                initialPosition: _trackingPickup,
+                padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * heightFactor),
+                markers: {
+                  if (_trackingPickup != null)
+                    Marker(
+                      markerId: const MarkerId('pickup'),
+                      position: _trackingPickup!,
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+                      infoWindow: InfoWindow(title: 'Pickup Point', snippet: booking.pickupAddress),
+                    ),
+                  if (_trackingDrop != null)
+                    Marker(
+                      markerId: const MarkerId('drop'),
+                      position: _trackingDrop!,
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      infoWindow: InfoWindow(title: 'Destination', snippet: booking.dropAddress),
+                    ),
+                  if (booking.driverLocation != null)
+                    Marker(
+                      markerId: const MarkerId('driver'),
+                      position: LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude),
+                      rotation: booking.driverHeading ?? 0.0,
+                      icon: _laariIcon,
+                      anchor: const Offset(0.5, 0.5),
+                      infoWindow: const InfoWindow(title: 'Lorry Location'),
+                      zIndex: 2,
+                    ),
+                  if (booking.status.toLowerCase() == 'pending') ..._driverMarkers,
+                },
+                polylines: _polylines,
+                onMapCreated: (c) {
+                  _mapController = c;
+                  if (_trackingPickup != null && _trackingDrop != null) {
+                    LatLngBounds bounds;
+                    if (_trackingPickup!.latitude > _trackingDrop!.latitude) {
+                      bounds = LatLngBounds(southwest: _trackingDrop!, northeast: _trackingPickup!);
+                    } else {
+                      bounds = LatLngBounds(southwest: _trackingPickup!, northeast: _trackingDrop!);
+                    }
+                    c.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+                  }
+                },
+              ),
+            );
+          }
         ),
 
         // Map Type Toggle
@@ -901,163 +928,408 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
 
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 100, 
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                )
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Driver Status Pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF00D4AA), width: 1),
+        NotificationListener<DraggableScrollableNotification>(
+          onNotification: (notification) {
+            _panelHeightNotifier.value = notification.extent;
+            return true;
+          },
+          child: DraggableScrollableSheet(
+            controller: _sheetController,
+            initialChildSize: 0.35,
+            minChildSize: 0.15,
+            maxChildSize: 0.65,
+            builder: (BuildContext context, ScrollController scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, -5),
+                    )
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: EdgeInsets.only(
+                    left: 20, 
+                    right: 20, 
+                    top: 12, 
+                    bottom: MediaQuery.of(context).padding.bottom + 20
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Drag handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Icon(Icons.person_pin_circle_rounded, size: 12, color: Color(0xFF00D4AA)),
-                          const SizedBox(width: 4),
+                          // Driver Status Pill
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00D4AA).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFF00D4AA), width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person_pin_circle_rounded, size: 12, color: Color(0xFF00D4AA)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  () {
+                                    final status = booking.status.toLowerCase();
+                                    if (status == 'accepted') return 'Driver Heading to Pickup';
+                                    if (status == 'loading_started') return 'Loading Started';
+                                    if (status == 'loading_completed') return 'Loading Completed';
+                                    if (status == 'in_transit') return 'In Transit';
+                                    if (status == 'completed') return 'Ride Completed';
+                                    return 'Driver Connected';
+                                  }(),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF00D4AA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           Text(
-                            booking.status == 'accepted' 
-                              ? (booking.eta != null ? 'Arriving in ${booking.eta}' : 'Driver is coming')
-                              : (booking.status == 'in_transit' ? 'Heading to destination' : 'Driver Connected'),
+                            booking.distanceRemaining != null 
+                              ? '${booking.distanceRemaining} away'
+                              : 'ID: ${booking.id.substring(0, 8)}',
                             style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF00D4AA),
+                              fontSize: 11,
+                              color: AppColors.textMuted,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.call, color: Colors.green, size: 20),
-                          onPressed: () async {
-                            final Uri url = Uri.parse('tel:+919876543210');
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(url);
-                            }
-                          },
+                      const SizedBox(height: 16),
+
+                      // ── DYNAMIC STATUS UPDATE MESSAGE ──
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: () {
+                            final status = booking.status.toLowerCase();
+                            if (status == 'accepted') return Colors.blue.withOpacity(0.08);
+                            if (status == 'loading_started') return Colors.orange.withOpacity(0.08);
+                            if (status == 'loading_completed') return Colors.purple.withOpacity(0.08);
+                            if (status == 'in_transit') return Colors.green.withOpacity(0.08);
+                            if (status == 'completed') return Colors.teal.withOpacity(0.08);
+                            return Colors.grey.withOpacity(0.08);
+                          }(),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: () {
+                              final status = booking.status.toLowerCase();
+                              if (status == 'accepted') return Colors.blue.withOpacity(0.3);
+                              if (status == 'loading_started') return Colors.orange.withOpacity(0.3);
+                              if (status == 'loading_completed') return Colors.purple.withOpacity(0.3);
+                              if (status == 'in_transit') return Colors.green.withOpacity(0.3);
+                              if (status == 'completed') return Colors.teal.withOpacity(0.3);
+                              return Colors.grey.withOpacity(0.3);
+                            }(),
+                            width: 1.5,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          booking.distanceRemaining != null 
-                            ? '${booking.distanceRemaining} away'
-                            : 'ID: ${booking.id.substring(0, 8)}',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                            fontWeight: FontWeight.w600,
+                        child: Row(
+                          children: [
+                            Icon(
+                              () {
+                                final status = booking.status.toLowerCase();
+                                if (status == 'accepted') return Icons.info_outline_rounded;
+                                if (status == 'loading_started') return Icons.hourglass_top_rounded;
+                                if (status == 'loading_completed') return Icons.check_circle_outline_rounded;
+                                if (status == 'in_transit') return Icons.local_shipping_rounded;
+                                if (status == 'completed') return Icons.verified_rounded;
+                                return Icons.notifications_active_rounded;
+                              }(),
+                              color: () {
+                                final status = booking.status.toLowerCase();
+                                if (status == 'accepted') return Colors.blue;
+                                if (status == 'loading_started') return Colors.orange;
+                                if (status == 'loading_completed') return Colors.purple;
+                                if (status == 'in_transit') return Colors.green;
+                                if (status == 'completed') return Colors.teal;
+                                return Colors.grey;
+                              }(),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                () {
+                                  final status = booking.status.toLowerCase();
+                                  final name = _driverName ?? 'Your driver';
+                                  if (status == 'accepted') return '$name has accepted your request';
+                                  if (status == 'loading_started') return 'Loading Started';
+                                  if (status == 'loading_completed') return 'Loading Completed';
+                                  if (status == 'in_transit') return 'Ride Started';
+                                  if (status == 'completed') return 'Ride Completed';
+                                  return 'Lorry booking status synchronized';
+                                }(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: () {
+                                    final status = booking.status.toLowerCase();
+                                    if (status == 'accepted') return Colors.blue.shade300;
+                                    if (status == 'loading_started') return Colors.orange.shade300;
+                                    if (status == 'loading_completed') return Colors.purple.shade300;
+                                    if (status == 'in_transit') return Colors.green.shade300;
+                                    if (status == 'completed') return Colors.teal.shade300;
+                                    return Colors.grey.shade400;
+                                  }(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Driver info row
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: AppColors.primary.withOpacity(0.1),
+                            child: const Icon(Icons.person_rounded, color: AppColors.primary, size: 28),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_driverName ?? 'Lorry Driver', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                                Text('${_driverLorryModel ?? "Truck"} • ${_driverLorryNo ?? "MH-12-AB-1234"}', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.call_rounded, color: Colors.green, size: 24),
+                            onPressed: () async {
+                              final String phone = _driverPhone ?? '+919876543210';
+                              final Uri url = Uri.parse('tel:$phone');
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      
+                      // OTP Badge (only if trip not started)
+                      if (booking.otp != null && booking.status.toLowerCase() != 'in_transit') ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.vpn_key_rounded, size: 16, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'TELL DRIVER OTP: ',
+                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                              ),
+                              Text(
+                                booking.otp!,
+                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: 2),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  booking.route,
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  booking.status == 'accepted' ? 'Driver is heading to pickup' : 'Driver is heading to destination',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Journey Progress Bar
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Trip Progress', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
-                        Text(
-                          booking.status == 'accepted' ? 'To Pickup' : 'To Destination',
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+
+                      const SizedBox(height: 16),
+                      Text(
+                        booking.route,
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: LinearProgressIndicator(
-                        value: () {
-                          if (booking.totalDistanceMeters == null || booking.distanceRemainingMeters == null) {
-                            return booking.status == 'in_transit' ? 0.5 : 0.2;
-                          }
-                          double progress = 1.0 - (booking.distanceRemainingMeters! / booking.totalDistanceMeters!);
-                          return progress.clamp(0.0, 1.0);
-                        }(),
-                        backgroundColor: AppColors.border,
-                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                        minHeight: 8,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () => BookingService().completeBooking(booking.id),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00915E),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.check_circle_rounded, size: 20),
-                        const SizedBox(width: 10),
-                        Text('Journey Completed', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15)),
-                      ],
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        booking.status.toLowerCase() == 'in_transit' ? 'Drop Address: ${booking.dropAddress}' : 'Pickup Address: ${booking.pickupAddress}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Journey Progress Bar
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Trip Progress', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                              Text(
+                                booking.status.toLowerCase() == 'in_transit' ? 'To Destination' : 'To Pickup',
+                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: LinearProgressIndicator(
+                              value: () {
+                                if (booking.totalDistanceMeters == null || booking.distanceRemainingMeters == null) {
+                                  return booking.status.toLowerCase() == 'in_transit' ? 0.5 : 0.2;
+                                }
+                                double progress = 1.0 - (booking.distanceRemainingMeters! / booking.totalDistanceMeters!);
+                                return progress.clamp(0.0, 1.0);
+                              }(),
+                              backgroundColor: AppColors.border,
+                              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                              minHeight: 8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: SizedBox(
+                              height: 52,
+                              child: OutlinedButton(
+                                onPressed: () => _handleCancelBooking(booking.id),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.error,
+                                  side: const BorderSide(color: AppColors.error, width: 1.5),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                                child: Text('Cancel', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: SizedBox(
+                              height: 52,
+                              child: ElevatedButton(
+                                onPressed: () => _handleCompleteBooking(booking.id),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00915E),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  elevation: 0,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text('Complete', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              );
+            }
           ),
         ),
       ],
     );
+  }
+
+  void _clearMapState() {
+    if (mounted) {
+      setState(() {
+        _markers.clear();
+        _polylines.clear();
+        _trackingPickup = null;
+        _trackingDrop = null;
+        _lastBookingId = null;
+        _lastStatus = null;
+        _lastPolylineUpdate = null;
+        _pickupController.clear();
+        _dropController.clear();
+        _pickupAddress = '';
+        _dropAddress = '';
+      });
+    }
+  }
+
+  Future<void> _handleCancelBooking(String bookingId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Journey?'),
+        content: const Text('Are you sure you want to cancel this journey?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await BookingService().cancelBooking(bookingId);
+      _clearMapState();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Journey cancelled successfully'))
+        );
+      }
+    }
+  }
+
+  Future<void> _handleCompleteBooking(String bookingId) async {
+    await BookingService().completeBooking(bookingId);
+    _clearMapState();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Journey completed!'))
+      );
+    }
   }
 
   Widget _mapActionBtn({required IconData icon, required VoidCallback onTap}) {

@@ -13,6 +13,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'dart:ui' as ui;
 import '../utils/map_constants.dart';
 import '../services/tracking_service.dart';
+import 'package:flutter_animarker/widgets/animarker.dart';
 
 class LiveTrackingPage extends StatefulWidget {
   final String bookingId;
@@ -32,6 +33,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     with SingleTickerProviderStateMixin {
   // ── Map ──────────────────────────────────────────────────────────────
   GoogleMapController? _mapController;
+  final Completer<GoogleMapController> _completer = Completer<GoogleMapController>();
   LatLng? _driverLatLng;
   BitmapDescriptor laariIcon = BitmapDescriptor.defaultMarker;
   final Set<Marker> _markers = {};
@@ -55,6 +57,12 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   String _distanceRemaining = '--';
   int? _distanceRemainingMeters;
   DateTime? _lastEtaUpdate;
+  String? _correctOtp;
+  final TextEditingController _otpController = TextEditingController();
+
+  // ── PANEL STATE ───────────────────────────────────────────────────────
+  final ValueNotifier<double> _panelHeightNotifier = ValueNotifier<double>(0.3);
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
 
   // ── Animation (pulsing marker) ────────────────────────────────────────
   late AnimationController _pulseController;
@@ -79,6 +87,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         widget.bookingData['price']?.toString() ??
         '0';
     _tripStatus = widget.bookingData['status'] ?? 'accepted';
+    _correctOtp = widget.bookingData['otp']?.toString();
 
     final pLat = widget.bookingData['pickupLat'];
     final pLng = widget.bookingData['pickupLng'];
@@ -114,68 +123,17 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
 
   Future<void> _setCustomMarker() async {
     try {
-      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(pictureRecorder);
-      const double size = 80.0;
-      
-      final Paint bodyPaint = Paint()
-        ..color = const Color(0xFFE53935) 
-        ..style = PaintingStyle.fill;
-
-      final Paint cabinPaint = Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill;
-
-      final Paint detailPaint = Paint()
-        ..color = const Color(0xFF37474F).withOpacity(0.8)
-        ..style = PaintingStyle.fill;
-
-      final Paint shadowPaint = Paint()
-        ..color = Colors.black.withOpacity(0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25 + 2, size * 0.1 + 2, size * 0.5, size * 0.8),
-          const Radius.circular(4),
-        ),
-        shadowPaint,
+      final icon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(120, 120)),
+        'assets/lorry_3d.png',
       );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
-          const Radius.circular(2),
-        ),
-        bodyPaint,
-      );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
-          const Radius.circular(6),
-        ),
-        cabinPaint,
-      );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.3, size * 0.12, size * 0.4, size * 0.08),
-          const Radius.circular(1),
-        ),
-        detailPaint,
-      );
-
-      final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
-      final data = await img.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (mounted && data != null) {
+      if (mounted) {
         setState(() {
-          laariIcon = BitmapDescriptor.bytes(data.buffer.asUint8List());
+          laariIcon = icon;
         });
       }
     } catch (e) {
-      debugPrint("Error generating custom marker: $e");
+      debugPrint("Error loading custom 3d marker: $e");
     }
   }
 
@@ -194,13 +152,32 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         print('DEBUG [DriverApp]: Drop Resolved: $_dropLatLng');
       }
 
-      if (_pickupLatLng != null && _dropLatLng != null) {
-        final directions = await geoService.getDirectionsFromLatLng(_pickupLatLng!, _dropLatLng!);
+      LatLng? origin;
+      LatLng? dest;
+
+      final status = _tripStatus.toLowerCase();
+      if (status == 'accepted' || status == 'loading_started' || status == 'loading_completed') {
+        if (_driverLatLng != null && _pickupLatLng != null) {
+          origin = _driverLatLng;
+          dest = _pickupLatLng;
+        } else if (_pickupLatLng != null) {
+          origin = _pickupLatLng;
+          dest = _pickupLatLng;
+        }
+      } else if (status == 'in_transit') {
+        if (_pickupLatLng != null && _dropLatLng != null) {
+          origin = _pickupLatLng;
+          dest = _dropLatLng;
+        }
+      }
+
+      if (origin != null && dest != null) {
+        final directions = await geoService.getDirectionsFromLatLng(origin, dest);
         if (directions != null) {
           final polylinePoints = PolylinePoints();
           List<PointLatLng> result = polylinePoints.decodePolyline(directions['polyline']);
           _fullRoutePoints = result.map((p) => LatLng(p.latitude, p.longitude)).toList();
-          print('DEBUG [DriverApp]: Route Resolved with ${_fullRoutePoints.length} points');
+          print('DEBUG [DriverApp]: Route Resolved with ${_fullRoutePoints.length} points for status $status');
         }
       }
 
@@ -216,6 +193,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     _bookingSub?.cancel();
     _mapController?.dispose();
     _pulseController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -375,10 +353,18 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   }
 
   Future<void> _updateEta(LatLng currentPos) async {
-    if (_dropLatLng == null) return;
+    LatLng? target;
+    final status = _tripStatus.toLowerCase();
+    if (status == 'accepted' || status == 'loading_started' || status == 'loading_completed') {
+      target = _pickupLatLng;
+    } else if (status == 'in_transit') {
+      target = _dropLatLng;
+    }
+    
+    if (target == null) return;
     
     final geoService = GeocodingService(_apiKey);
-    final directions = await geoService.getDirectionsFromLatLng(currentPos, _dropLatLng!);
+    final directions = await geoService.getDirectionsFromLatLng(currentPos, target);
     
     if (directions != null && mounted) {
       setState(() {
@@ -401,8 +387,12 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       final data = snap.data()!;
       final newStatus = data['status'] ?? _tripStatus;
       
+      final oldStatus = _tripStatus;
       setState(() {
         _tripStatus = newStatus;
+        if (data['otp'] != null) {
+          _correctOtp = data['otp'].toString();
+        }
         // Refresh addresses if they were missing
         if (_pickup == 'Unknown pickup' || _pickup.isEmpty) {
           _pickup = data['pickupAddress'] ?? data['route'] ?? 'Unknown pickup';
@@ -411,15 +401,98 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           _drop = data['dropAddress'] ?? '';
         }
       });
+
+      if (newStatus != oldStatus) {
+        _fetchCoordinates();
+        if (_driverLatLng != null) {
+          _updateEta(_driverLatLng!);
+        }
+      }
     });
   }
 
   // ── Trip status actions ───────────────────────────────────────────────
-  Future<void> _startTrip() async {
+  Future<void> _startLoading() async {
+    setState(() => _isUpdating = true);
+    try {
+      await _firestoreService.updateTripStatus(widget.bookingId, 'loading_started');
+      if (mounted) setState(() => _tripStatus = 'loading_started');
+      _fetchCoordinates();
+      if (_driverLatLng != null) {
+        _updateEta(_driverLatLng!);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading Started! Status synchronized with customer. 📦'), backgroundColor: Colors.orange),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to start loading: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<bool> _verifyOtpAndStartLoading(String otpInput) async {
+    final correctOtp = _correctOtp ?? widget.bookingData['otp']?.toString() ?? '1234';
+    if (otpInput.trim() != correctOtp.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid OTP. Please verify with customer and try again! ❌'), backgroundColor: Colors.red),
+      );
+      return false;
+    }
+
+    setState(() => _isUpdating = true);
+    try {
+      await _firestoreService.updateTripStatus(widget.bookingId, 'loading_started');
+      if (mounted) setState(() => _tripStatus = 'loading_started');
+      _fetchCoordinates();
+      if (_driverLatLng != null) {
+        _updateEta(_driverLatLng!);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP Verified! Loading officially started. 📦'), backgroundColor: Colors.orange),
+      );
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to start loading: $e')));
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _completeLoading() async {
+    setState(() => _isUpdating = true);
+    try {
+      await _firestoreService.updateTripStatus(widget.bookingId, 'loading_completed');
+      if (mounted) setState(() => _tripStatus = 'loading_completed');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading Completed! Ready to start the ride. 🚚'), backgroundColor: Colors.purple),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to complete loading: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _startRide() async {
     setState(() => _isUpdating = true);
     try {
       await _firestoreService.updateTripStatus(widget.bookingId, 'in_transit');
       if (mounted) setState(() => _tripStatus = 'in_transit');
+      _fetchCoordinates();
+      if (_driverLatLng != null) {
+        _updateEta(_driverLatLng!);
+      }
       
       // Start Realtime Database GPS Tracking
       try {
@@ -427,10 +500,14 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       } catch (e) {
          debugPrint("Failed to start RTDB tracking: $e");
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ride officially started! Dynamic route to drop address is now active 🚀'), backgroundColor: Colors.green),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to start trip: $e')));
+            SnackBar(content: Text('Failed to start ride: $e')));
       }
     } finally {
       if (mounted) setState(() => _isUpdating = false);
@@ -495,24 +572,38 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
 
   // ── Helpers ───────────────────────────────────────────────────────────
   String get _statusLabel {
-    switch (_tripStatus) {
+    final status = _tripStatus.toLowerCase();
+    switch (status) {
+      case 'accepted':
+        return 'HEADING TO PICKUP 📍';
+      case 'loading_started':
+        return 'LOADING STARTED 📦';
+      case 'loading_completed':
+        return 'LOADING COMPLETED 🚚';
       case 'in_transit':
-        return 'IN TRANSIT 🚛';
+        return 'IN TRANSIT (RIDE STARTED) 🚚';
       case 'completed':
         return 'COMPLETED ✅';
       default:
-        return 'GOING TO PICKUP 📍';
+        return 'HEADING TO PICKUP 📍';
     }
   }
 
   Color get _statusColor {
-    switch (_tripStatus) {
-      case 'in_transit':
+    final status = _tripStatus.toLowerCase();
+    switch (status) {
+      case 'accepted':
         return const Color(0xFF185A9D);
+      case 'loading_started':
+        return Colors.orange;
+      case 'loading_completed':
+        return Colors.purple;
+      case 'in_transit':
+        return Colors.blue;
       case 'completed':
         return Colors.green;
       default:
-        return const Color(0xFF43CEA2);
+        return const Color(0xFF185A9D);
     }
   }
 
@@ -525,27 +616,42 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       body: Stack(
         children: [
           // ── Map (full screen) ────────────────────────────────────────
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: _driverLatLng ?? const LatLng(12.3077, 76.6533),
-              zoom: 16,
-            ),
-            markers: _markers,
-            polylines: _polylines,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: false,
-            compassEnabled: true,
-            mapType: MapType.normal,
-            onMapCreated: (controller) {
-              _mapController = controller;
-              if (_pickupLatLng != null && _dropLatLng != null) {
-                _fitMapToRoute();
-              } else if (_driverLatLng != null) {
-                controller.animateCamera(
-                    CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
-              }
-            },
+          ValueListenableBuilder<double>(
+            valueListenable: _panelHeightNotifier,
+            builder: (context, heightFactor, child) {
+              return Animarker(
+                mapId: _completer.future.then<int>((value) => value.mapId),
+                curve: Curves.ease,
+                duration: const Duration(milliseconds: 2000),
+                markers: _markers,
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _driverLatLng ?? const LatLng(12.3077, 76.6533),
+                    zoom: 16,
+                  ),
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * heightFactor),
+                  markers: _markers,
+                  polylines: _polylines,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                  zoomControlsEnabled: false,
+                  compassEnabled: true,
+                  mapType: MapType.normal,
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    if (!_completer.isCompleted) {
+                      _completer.complete(controller);
+                    }
+                    if (_pickupLatLng != null && _dropLatLng != null) {
+                      _fitMapToRoute();
+                    } else if (_driverLatLng != null) {
+                      controller.animateCamera(
+                          CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
+                    }
+                  },
+                ),
+              );
+            }
           ),
 
           // ── Top bar: back + status ───────────────────────────────────
@@ -631,183 +737,316 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           ),
 
           // ── Map Action Buttons ──────────────────────────────────────
-          Positioned(
-            right: 16,
-            bottom: 280,
-            child: Column(
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'refresh_btn',
-                  backgroundColor: Colors.white,
-                  onPressed: () async {
-                    try {
-                      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-                      _onNewPosition(pos);
-                      _fetchCoordinates(); // Refresh route points
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Location refreshed'), duration: Duration(seconds: 1))
-                      );
-                    } catch (e) {
-                      debugPrint('Manual refresh failed: $e');
-                    }
-                  },
-                  child: const Icon(Icons.refresh_rounded, color: Color(0xFF185A9D)),
+          ValueListenableBuilder<double>(
+            valueListenable: _panelHeightNotifier,
+            builder: (context, heightFactor, child) {
+              return Positioned(
+                right: 16,
+                bottom: MediaQuery.of(context).size.height * heightFactor + 16,
+                child: Column(
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'refresh_btn',
+                      backgroundColor: Colors.white,
+                      onPressed: () async {
+                        try {
+                          final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                          _onNewPosition(pos);
+                          _fetchCoordinates(); // Refresh route points
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Location refreshed'), duration: Duration(seconds: 1))
+                          );
+                        } catch (e) {
+                          debugPrint('Manual refresh failed: $e');
+                        }
+                      },
+                      child: const Icon(Icons.refresh_rounded, color: Color(0xFF185A9D)),
+                    ),
+                    const SizedBox(height: 12),
+                    FloatingActionButton.small(
+                      heroTag: 'recenter_btn',
+                      backgroundColor: Colors.white,
+                      onPressed: () {
+                        if (_driverLatLng != null) {
+                          _mapController?.animateCamera(
+                              CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
+                        }
+                      },
+                      child: const Icon(Icons.my_location_rounded, color: Color(0xFF185A9D)),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                FloatingActionButton.small(
-                  heroTag: 'recenter_btn',
-                  backgroundColor: Colors.white,
-                  onPressed: () {
-                    if (_driverLatLng != null) {
-                      _mapController?.animateCamera(
-                          CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
-                    }
-                  },
-                  child: const Icon(Icons.my_location_rounded, color: Color(0xFF185A9D)),
-                ),
-              ],
-            ),
+              );
+            }
           ),
 
           // ── Bottom sheet: trip info + action buttons ─────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: EdgeInsets.fromLTRB(
-                  24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E272E) : Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(32)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 20,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Handle bar
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Fare badge and Call button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.withOpacity(0.1),
-                          foregroundColor: Colors.green,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                        ),
-                        icon: const Icon(Icons.call, size: 18),
-                        label: const Text('Call Customer'),
-                        onPressed: () async {
-                          final Uri url = Uri.parse(
-                              'tel:+919876543210'); // Placeholder phone number
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(url);
-                          }
-                        },
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹$_fare',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF185A9D),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$_eta ($_distanceRemaining)',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+          NotificationListener<DraggableScrollableNotification>(
+            onNotification: (notification) {
+              _panelHeightNotifier.value = notification.extent;
+              return true;
+            },
+            child: DraggableScrollableSheet(
+              controller: _sheetController,
+              initialChildSize: 0.35,
+              minChildSize: 0.15,
+              maxChildSize: 0.65,
+              builder: (BuildContext context, ScrollController scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E272E) : Colors.white,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(32)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                        24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Handle bar
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
 
-                  // Pickup
-                  _routeRow(
-                    icon: Icons.radio_button_checked,
-                    color: const Color(0xFF43CEA2),
-                    label: 'Pickup',
-                    address: _pickup,
+                        // Fare badge and Call button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.withOpacity(0.1),
+                                foregroundColor: Colors.green,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
+                              ),
+                              icon: const Icon(Icons.call, size: 18),
+                              label: const Text('Call Customer'),
+                              onPressed: () async {
+                                final Uri url = Uri.parse(
+                                    'tel:+919876543210'); // Placeholder phone number
+                                if (await canLaunchUrl(url)) {
+                                  await launchUrl(url);
+                                }
+                              },
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '₹$_fare',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF185A9D),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$_eta ($_distanceRemaining)',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Pickup
+                        _routeRow(
+                          icon: Icons.radio_button_checked,
+                          color: const Color(0xFF43CEA2),
+                          label: 'Pickup',
+                          address: _pickup,
+                        ),
+                        if (_drop.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(left: 11),
+                            child: Container(
+                                height: 24,
+                                width: 2,
+                                color: Colors.grey.shade300),
+                          ),
+                          _routeRow(
+                            icon: Icons.location_on_rounded,
+                            color: Colors.redAccent,
+                            label: 'Drop',
+                            address: _drop,
+                          ),
+                        ],
+
+                        const SizedBox(height: 24),
+
+                        // Action button flow based on status
+                        () {
+                          final status = _tripStatus.toLowerCase();
+                          if (status == 'accepted') {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1.5),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.vpn_key_rounded, color: Colors.orange, size: 20),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Enter Customer OTP to Start Loading',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                color: isDark ? Colors.white : Colors.black87,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextField(
+                                              controller: _otpController,
+                                              keyboardType: TextInputType.number,
+                                              maxLength: 4,
+                                              style: const TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 8,
+                                              ),
+                                              decoration: InputDecoration(
+                                                hintText: '0000',
+                                                hintStyle: TextStyle(
+                                                  fontSize: 22,
+                                                  color: Colors.grey.shade400,
+                                                  letterSpacing: 8,
+                                                ),
+                                                counterText: '',
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  borderSide: const BorderSide(color: Colors.orange, width: 2),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          SizedBox(
+                                            height: 52,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.orange.shade700,
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                                elevation: 0,
+                                              ),
+                                              onPressed: _isUpdating ? null : () async {
+                                                if (_otpController.text.length < 4) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('Please enter 4 digits OTP'), backgroundColor: Colors.red),
+                                                  );
+                                                  return;
+                                                }
+                                                final success = await _verifyOtpAndStartLoading(_otpController.text);
+                                                if (success) {
+                                                  _otpController.clear();
+                                                }
+                                              },
+                                              child: _isUpdating
+                                                ? const SizedBox(
+                                                    height: 20,
+                                                    width: 20,
+                                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                                  )
+                                                : const Text(
+                                                    'Verify',
+                                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          } else if (status == 'loading_started') {
+                            return _actionButton(
+                              label: 'Complete Loading 🚚',
+                              color: Colors.purple.shade600,
+                              onTap: _isUpdating ? null : _completeLoading,
+                            );
+                          } else if (status == 'loading_completed') {
+                            return _actionButton(
+                              label: 'Start Ride 🚀',
+                              color: Colors.blue.shade700,
+                              onTap: _isUpdating ? null : _startRide,
+                            );
+                          } else if (status == 'in_transit') {
+                            return _actionButton(
+                              label: 'Complete Ride ✅',
+                              color: Colors.green.shade600,
+                              onTap: _isUpdating ? null : _completeTrip,
+                            );
+                          } else {
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Center(
+                                child: Text('Ride Completed ✅',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                        fontSize: 16)),
+                              ),
+                            );
+                          }
+                        }(),
+                      ],
+                    ),
                   ),
-                  if (_drop.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(left: 11),
-                      child: Container(
-                          height: 24,
-                          width: 2,
-                          color: Colors.grey.shade300),
-                    ),
-                    _routeRow(
-                      icon: Icons.location_on_rounded,
-                      color: Colors.redAccent,
-                      label: 'Drop',
-                      address: _drop,
-                    ),
-                  ],
-
-                  const SizedBox(height: 24),
-
-                  // Action button
-                  if (_tripStatus == 'accepted')
-                    _actionButton(
-                      label: 'Start Trip 🚀',
-                      color: const Color(0xFF185A9D),
-                      onTap: _isUpdating ? null : _startTrip,
-                    )
-                  else if (_tripStatus == 'in_transit')
-                    _actionButton(
-                      label: 'Complete Trip ✅',
-                      color: Colors.green.shade600,
-                      onTap: _isUpdating ? null : _completeTrip,
-                    )
-                  else
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Center(
-                        child: Text('Trip Completed ✅',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                                fontSize: 16)),
-                      ),
-                    ),
-                ],
-              ),
+                );
+              }
             ),
           ),
         ],

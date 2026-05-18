@@ -17,6 +17,7 @@ class MapScreen extends StatefulWidget {
   final bool? isLiveTracking;
   final LatLng? driverLocation;
   final double? driverHeading;
+  final EdgeInsets? padding;
 
   const MapScreen({
     super.key,
@@ -28,6 +29,7 @@ class MapScreen extends StatefulWidget {
     this.isLiveTracking,
     this.driverLocation,
     this.driverHeading,
+    this.padding,
   });
 
   @override
@@ -57,6 +59,7 @@ class _MapScreenState extends State<MapScreen> {
 
   StreamSubscription<Position>? _positionStreamSubscription;
   StreamSubscription<DatabaseEvent>? _driverStreamSubscription;
+  BitmapDescriptor? _internalTruckIcon;
 
   @override
   void initState() {
@@ -73,7 +76,20 @@ class _MapScreenState extends State<MapScreen> {
       _driverHeading = widget.driverHeading!;
     }
     
+    _loadCustomIcon();
     _initializeMap();
+  }
+
+  Future<void> _loadCustomIcon() async {
+    try {
+      _internalTruckIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(120, 120)),
+        'assets/lorry_3d.png',
+      );
+      if (mounted) setState(() { _updateMarkers(); });
+    } catch (e) {
+      debugPrint("Error loading 3d lorry icon in MapScreen: $e");
+    }
   }
 
   @override
@@ -98,11 +114,10 @@ class _MapScreenState extends State<MapScreen> {
       _updateMarkers();
     }
 
-    // Start Realtime Tracking
-    _startLiveTracking();
-    
-    // Fetch initial route
-    _getPolylinePoints();
+    // Start Realtime Tracking ONLY if driverId is provided
+    if (widget.driverId != null) {
+      _startLiveTracking();
+    }
   }
 
   Future<bool> _handleLocationPermission() async {
@@ -160,8 +175,6 @@ class _MapScreenState extends State<MapScreen> {
             _driverHeading = heading;
             _updateMarkers();
           });
-          
-          _getPolylinePoints();
         }
       }, onError: (error) {
         print("Firebase Listen Error: $error");
@@ -170,6 +183,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _updateMarkers() {
+    // We only update internal markers if we are in live tracking mode
+    if (widget.driverId == null) {
+      _markers.clear();
+      return;
+    }
+
     // Current User Marker
     if (_currentP != null) {
       _markers[_currentLocationMarkerId] = Marker(
@@ -185,44 +204,10 @@ class _MapScreenState extends State<MapScreen> {
       markerId: _driverMarkerId,
       position: _driverP,
       rotation: _driverHeading, // Point marker in the direction of travel
+      anchor: const Offset(0.5, 0.5),
       infoWindow: const InfoWindow(title: "Driver/Truck"),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+      icon: _internalTruckIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
     );
-  }
-
-  Future<void> _getPolylinePoints() async {
-    if (_currentP == null) return;
-
-    PolylinePoints polylinePoints = PolylinePoints();
-    PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
-      googleApiKey: googleApiKey,
-      request: PolylineRequest(
-        origin: PointLatLng(_driverP.latitude, _driverP.longitude),
-        destination: PointLatLng(_currentP!.latitude, _currentP!.longitude),
-        mode: TravelMode.driving,
-      ),
-    );
-
-    if (result.points.isNotEmpty) {
-      _polylineCoordinates.clear();
-      for (var point in result.points) {
-        _polylineCoordinates.add(LatLng(point.latitude, point.longitude));
-      }
-      _generatePolyLineFromPoints(_polylineCoordinates);
-    }
-  }
-
-  void _generatePolyLineFromPoints(List<LatLng> polylineCoordinates) {
-    PolylineId id = const PolylineId("poly");
-    Polyline polyline = Polyline(
-      polylineId: id,
-      color: Colors.black,
-      points: polylineCoordinates,
-      width: 5,
-    );
-    setState(() {
-      _polylines[id] = polyline;
-    });
   }
 
   void _cameraToPosition(LatLng pos) async {
@@ -283,6 +268,7 @@ class _MapScreenState extends State<MapScreen> {
                   target: _currentP!,
                   zoom: 13,
                 ),
+                padding: widget.padding ?? EdgeInsets.zero,
                 markers: allMarkers,
                 polylines: allPolylines,
                 myLocationEnabled: true,

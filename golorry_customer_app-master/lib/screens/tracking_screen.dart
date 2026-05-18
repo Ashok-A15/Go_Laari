@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' hide Marker;
@@ -130,6 +131,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     if (user == null) return;
     setState(() => _confirming = true);
     try {
+      final String generatedOtp = (1000 + Random().nextInt(9000)).toString();
       final booking = BookingModel(
         id: '',
         customerId: user.uid,
@@ -145,6 +147,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         distance: '${(_distanceKm ?? 8.5).toStringAsFixed(1)} km • ${(_durationMin ?? 25).toStringAsFixed(0)} min',
         status: 'pending',
         createdAt: DateTime.now(),
+        otp: generatedOtp,
         totalDistanceMeters: widget.totalDistanceMeters,
       );
       await BookingService().createBooking(booking);

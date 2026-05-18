@@ -70,7 +70,7 @@ class BookingService {
     return _db
         .collection('bookings')
         .where('customerId', isEqualTo: _uid)
-        .where('status', whereIn: ['pending', 'accepted', 'in_transit', 'In Transit', 'Confirmed'])
+        .where('status', whereIn: ['pending', 'accepted', 'confirmed', 'Confirmed', 'arrived', 'loading_started', 'loading_completed', 'in_transit', 'In Transit'])
         .limit(1)
         .snapshots()
         .map((snap) =>

@@ -276,7 +276,7 @@ class FirestoreService {
     if (uid.isEmpty) return const Stream.empty();
     return _db.collection('bookings')
         .where('driverId', isEqualTo: uid)
-        .where('status', whereIn: ['accepted', 'in_transit', 'Confirmed', 'In Transit'])
+        .where('status', whereIn: ['accepted', 'confirmed', 'Confirmed', 'arrived', 'loading_started', 'loading_completed', 'in_transit', 'In Transit'])
         .limit(1)
         .snapshots();
   }
@@ -290,5 +290,47 @@ class FirestoreService {
     if (status == 'in_transit') update['tripStartedAt'] = FieldValue.serverTimestamp();
     if (status == 'completed') update['tripCompletedAt'] = FieldValue.serverTimestamp();
     await _db.collection('bookings').doc(bookingId).update(update);
+  }
+
+  // Get driver-specific stats
+  Future<Map<String, dynamic>> getDriverStats() async {
+    final uid = currentUid;
+    if (uid.isEmpty) return {'totalTrips': 0, 'earnings': 0.0, 'distance': 0.0, 'name': 'Driver'};
+
+    final driverDoc = await _db.collection('drivers').doc(uid).get();
+    final name = driverDoc.data()?['name'] ?? 'Driver';
+
+    final bookingsSnap = await _db.collection('bookings')
+        .where('driverId', isEqualTo: uid)
+        .where('status', isEqualTo: 'completed')
+        .get();
+
+    double totalEarnings = 0;
+    double totalDistance = 0;
+    for (var doc in bookingsSnap.docs) {
+      final data = doc.data();
+      final fareInfo = data['totalFare'] ?? data['price'] ?? 0;
+      double fare = 0.0;
+      if (fareInfo is num) {
+        fare = fareInfo.toDouble();
+      } else if (fareInfo is String) {
+        fare = double.tryParse(fareInfo.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+      }
+      totalEarnings += fare;
+
+      final distInfo = data['distance'] ?? '0';
+      if (distInfo is String) {
+        totalDistance += double.tryParse(distInfo.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+      } else if (distInfo is num) {
+        totalDistance += distInfo.toDouble();
+      }
+    }
+
+    return {
+      'name': name,
+      'totalTrips': bookingsSnap.docs.length,
+      'earnings': totalEarnings,
+      'distance': totalDistance,
+    };
   }
 }

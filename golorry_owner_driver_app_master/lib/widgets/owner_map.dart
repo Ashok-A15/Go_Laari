@@ -12,12 +12,14 @@ class OwnerMap extends StatefulWidget {
   final Function(GoogleMapController)? onMapCreated;
   final bool showDefaultLocationButton;
   final MapType mapType;
+  final bool trafficEnabled;
 
   const OwnerMap({
     super.key, 
     this.onMapCreated,
     this.showDefaultLocationButton = true,
     this.mapType = MapType.normal,
+    this.trafficEnabled = false,
   });
 
   @override
@@ -80,86 +82,17 @@ class OwnerMapState extends State<OwnerMap> {
 
   Future<void> _setCustomMarker() async {
     try {
-      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(pictureRecorder);
-      const double size = 80.0; // Much smaller size as requested
-      
-      // Paint for the truck body (Red)
-      final Paint bodyPaint = Paint()
-        ..color = const Color(0xFFE53935) 
-        ..style = PaintingStyle.fill;
-
-      // Paint for the cabin (White)
-      final Paint cabinPaint = Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill;
-
-      // Paint for details (Windows - Dark Grey)
-      final Paint detailPaint = Paint()
-        ..color = const Color(0xFF37474F).withOpacity(0.8)
-        ..style = PaintingStyle.fill;
-
-      // Shadow
-      final Paint shadowPaint = Paint()
-        ..color = Colors.black.withOpacity(0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-
-      // Draw shadow
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25 + 2, size * 0.1 + 2, size * 0.5, size * 0.8),
-          const Radius.circular(4),
-        ),
-        shadowPaint,
+      final icon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(120, 120)),
+        'assets/lorry_3d.png',
       );
-
-      // Draw Main Body (Back of the truck - Grey)
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25, size * 0.35, size * 0.5, size * 0.55),
-          const Radius.circular(2),
-        ),
-        bodyPaint,
-      );
-
-      // Draw Cabin (Front of the truck - White)
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.5, size * 0.25),
-          const Radius.circular(6),
-        ),
-        cabinPaint,
-      );
-
-      // Windshield (Dark)
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(size * 0.3, size * 0.12, size * 0.4, size * 0.08),
-          const Radius.circular(1),
-        ),
-        detailPaint,
-      );
-
-      // Highlights for 3D look
-      final Paint highlightPaint = Paint()
-        ..color = Colors.white.withOpacity(0.2)
-        ..style = PaintingStyle.fill;
-      
-      canvas.drawRect(
-        Rect.fromLTWH(size * 0.25, size * 0.1, size * 0.1, size * 0.8),
-        highlightPaint,
-      );
-
-      final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
-      final data = await img.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (mounted && data != null) {
+      if (mounted) {
         setState(() {
-          laariIcon = BitmapDescriptor.bytes(data.buffer.asUint8List());
+          laariIcon = icon;
         });
       }
     } catch (e) {
-      debugPrint("Error generating custom marker: $e");
+      debugPrint("Error loading custom 3d marker: $e");
     }
   }
 
@@ -205,7 +138,9 @@ class OwnerMapState extends State<OwnerMap> {
         Marker(
           markerId: const MarkerId("current"),
           position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          rotation: _currentPosition!.heading,
+          anchor: const Offset(0.5, 0.5),
+          icon: laariIcon, // Show the 3D lorry instead of the blue marker
         ),
       );
     }
@@ -214,6 +149,7 @@ class OwnerMapState extends State<OwnerMap> {
       children: [
         GoogleMap(
           mapType: widget.mapType,
+          trafficEnabled: widget.trafficEnabled,
           initialCameraPosition: const CameraPosition(
             target: LatLng(12.3077, 76.6533),
             zoom: 13,

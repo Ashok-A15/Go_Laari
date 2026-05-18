@@ -16,6 +16,7 @@ class BookingModel {
   final String? driverId;
   final GeoPoint? driverLocation;
   final double? driverHeading;
+  final String? otp;
 
   // We keep route/distance roughly as strings if needed, or just rely on pickup/drop
   final String route;
@@ -41,6 +42,7 @@ class BookingModel {
     this.driverId,
     this.driverLocation,
     this.driverHeading,
+    this.otp,
     required this.route,
     required this.distance,
     this.eta,
@@ -67,6 +69,7 @@ class BookingModel {
       driverId: data['driverId'],
       driverLocation: data['driverLocation'] as GeoPoint?,
       driverHeading: (data['driverHeading'] as num?)?.toDouble(),
+      otp: data['otp']?.toString(),
       route: data['route'] ?? 'Unknown Route',
       distance: data['distance'] ?? '',
       eta: data['eta'],
@@ -90,6 +93,7 @@ class BookingModel {
       'status': status,
       'createdAt': FieldValue.serverTimestamp(),
       'driverId': driverId,
+      'otp': otp,
       'route': route,
       'distance': distance,
       'totalDistanceMeters': totalDistanceMeters,
