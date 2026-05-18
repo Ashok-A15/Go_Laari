@@ -13,13 +13,17 @@ class OwnerMap extends StatefulWidget {
   final bool showDefaultLocationButton;
   final MapType mapType;
   final bool trafficEnabled;
+  /// When true (driver dashboard), only the driver's own lorry is shown.
+  /// When false (owner dashboard), all fleet drivers are shown.
+  final bool driverMode;
 
   const OwnerMap({
-    super.key, 
+    super.key,
     this.onMapCreated,
     this.showDefaultLocationButton = true,
     this.mapType = MapType.normal,
     this.trafficEnabled = false,
+    this.driverMode = false,
   });
 
   @override
@@ -33,18 +37,65 @@ class OwnerMapState extends State<OwnerMap> {
   Position? _currentPosition;
   final Set<Marker> _driverMarkers = {};
   StreamSubscription? _driversSubscription;
+  StreamSubscription? _ownLocationSub;
+  LatLng? _prevPosition;
   final FirestoreService _firestoreService = FirestoreService();
+
+  // ── Own GPS stream for driver mode ──────────────────────────────────
+  void _startOwnLocationStream() {
+    _ownLocationSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((pos) {
+      if (!mounted) return;
+      final current = LatLng(pos.latitude, pos.longitude);
+
+      // Calculate bearing between prev and current for accurate rotation
+      double bearing = pos.heading;
+      if (_prevPosition != null) {
+        bearing = Geolocator.bearingBetween(
+          _prevPosition!.latitude,
+          _prevPosition!.longitude,
+          current.latitude,
+          current.longitude,
+        );
+      }
+      _prevPosition = current;
+
+      setState(() {
+        _currentPosition = pos;
+        // In driver mode replace own-position marker with 3D lorry at correct heading
+        _driverMarkers.removeWhere((m) => m.markerId.value == 'current');
+        _driverMarkers.add(Marker(
+          markerId: const MarkerId('current'),
+          position: current,
+          rotation: bearing,
+          anchor: const Offset(0.5, 0.5),
+          icon: laariIcon,
+        ));
+      });
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _setCustomMarker().then((_) => _startTrackingDrivers());
+    _setCustomMarker().then((_) {
+      // Only fetch fleet if in owner mode
+      if (!widget.driverMode) {
+        _startTrackingDrivers();
+      }
+    });
     _requestLocationPermission();
+    _startOwnLocationStream();
   }
 
   @override
   void dispose() {
     _driversSubscription?.cancel();
+    _ownLocationSub?.cancel();
     super.dispose();
   }
 

@@ -176,6 +176,7 @@ class _DashboardPageState extends State<DashboardPage>
               key: _mapKey,
               mapType: _currentMapType,
               trafficEnabled: _trafficEnabled,
+              driverMode: true, // Hide other drivers, show only own lorry
             ),
           ),
 
