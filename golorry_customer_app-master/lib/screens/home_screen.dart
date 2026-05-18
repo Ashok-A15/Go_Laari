@@ -929,37 +929,49 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildActiveTrackingState(BookingModel booking) {
-    if (booking.driverId != null) {
-      _fetchDriverDetails(booking.driverId!);
-    }
+    // ── ALL side effects go into post-frame callbacks, NEVER directly in build()
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isMounted) return;
 
-    if (_lastBookingId != booking.id || 
-        _lastStatus != booking.status || 
-        (_lastPolylineUpdate == null || DateTime.now().difference(_lastPolylineUpdate!).inSeconds > 60)) {
-       _updateTrackingRoute(booking);
-       _lastBookingId = booking.id;
-       _lastStatus = booking.status;
-       _lastPolylineUpdate = DateTime.now();
-    }
-    
-    // Auto-follow driver & update route if location changes
-    if (booking.driverLocation != null) {
-      final currentDriverPos = LatLng(booking.driverLocation!.latitude, booking.driverLocation!.longitude);
-      if (_lastDriverLatLng == null || 
-          _lastDriverLatLng!.latitude != currentDriverPos.latitude || 
-          _lastDriverLatLng!.longitude != currentDriverPos.longitude) {
-        
-        _lastDriverLatLng = currentDriverPos;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Fetch driver details (cached, won't duplicate)
+      if (booking.driverId != null) {
+        _fetchDriverDetails(booking.driverId!);
+      }
+
+      // Route update: only if booking changed or status changed
+      final needsRouteUpdate = _lastBookingId != booking.id ||
+          _lastStatus != booking.status ||
+          (_lastPolylineUpdate == null ||
+              DateTime.now().difference(_lastPolylineUpdate!).inSeconds > 60);
+      if (needsRouteUpdate) {
+        _updateTrackingRoute(booking);
+        _lastBookingId = booking.id;
+        _lastStatus = booking.status;
+        _lastPolylineUpdate = DateTime.now();
+      }
+
+      // Camera follow driver: only when location actually changed
+      if (booking.driverLocation != null) {
+        final currentDriverPos = LatLng(
+          booking.driverLocation!.latitude,
+          booking.driverLocation!.longitude,
+        );
+        final changed = _lastDriverLatLng == null ||
+            _lastDriverLatLng!.latitude != currentDriverPos.latitude ||
+            _lastDriverLatLng!.longitude != currentDriverPos.longitude;
+        if (changed) {
+          _lastDriverLatLng = currentDriverPos;
           _mapController?.animateCamera(CameraUpdate.newLatLng(currentDriverPos));
           final status = booking.status.toLowerCase();
-          if (status == 'accepted' || status == 'loading_started' || status == 'loading_completed') {
+          if (status == 'accepted' ||
+              status == 'loading_started' ||
+              status == 'loading_completed') {
             _updateTrackingRoute(booking);
           }
-        });
+        }
       }
-    }
-    
+    });
+
     final isDark = AppColors.isDark;
     
     return Stack(

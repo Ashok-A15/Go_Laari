@@ -57,7 +57,9 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   String _distanceRemaining = '--';
   int? _distanceRemainingMeters;
   DateTime? _lastEtaUpdate;
+  DateTime? _lastRouteRecalc;
   String? _correctOtp;
+  bool _disposed = false; // Guard against setState-after-dispose
   final TextEditingController _otpController = TextEditingController();
 
   // ── PANEL STATE ───────────────────────────────────────────────────────
@@ -189,12 +191,21 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
 
   @override
   void dispose() {
+    _disposed = true;
     _locationSub?.cancel();
     _bookingSub?.cancel();
     _mapController?.dispose();
     _pulseController.dispose();
     _otpController.dispose();
+    _panelHeightNotifier.dispose();
+    _sheetController.dispose();
     super.dispose();
+  }
+
+  bool get _isMounted => mounted && !_disposed;
+
+  void _safeSetState(VoidCallback fn) {
+    if (_isMounted) setState(fn);
   }
 
   // ── Permission & GPS streaming ────────────────────────────────────────
@@ -204,7 +215,7 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
       perm = await Geolocator.requestPermission();
     }
     if (perm == LocationPermission.deniedForever) {
-      if (mounted) {
+      if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Location permission permanently denied')));
       }
@@ -222,16 +233,19 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     try {
       final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
-      _onNewPosition(pos);
+      if (_isMounted) _onNewPosition(pos);
     } catch (_) {}
 
-    // Then stream updates every ~2 seconds
+    // 10m filter = smooth Uber-like updates without flooding setState
+    _locationSub?.cancel();
     _locationSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 2, // Very frequent updates for Uber-like smoothness
+        distanceFilter: 10,
       ),
-    ).listen(_onNewPosition);
+    ).listen((pos) {
+      if (_isMounted) _onNewPosition(pos);
+    });
   }
 
   void _fitMapToRoute() {
@@ -251,98 +265,111 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
   }
 
   void _onNewPosition(Position pos) {
+    if (!_isMounted) return;
     final latLng = LatLng(pos.latitude, pos.longitude);
+    final prevLatLng = _driverLatLng;
 
-    setState(() {
-      _driverLatLng = latLng;
-      _routePoints.add(latLng);
+    _driverLatLng = latLng;
+    _routePoints.add(latLng);
+    _locationUpdateCount++;
 
-      // Moving driver marker (truck icon)
-      _markers
-        ..removeWhere((m) => m.markerId.value == 'driver' || m.markerId.value == 'pickup' || m.markerId.value == 'drop')
-        ..add(Marker(
-          markerId: const MarkerId('driver'),
-          position: latLng,
-          rotation: pos.heading,
-          icon: laariIcon, // FIXED TYPO
-          anchor: const Offset(0.5, 0.5),
-          infoWindow: const InfoWindow(title: 'Your Location'),
-          zIndex: 2,
-        ));
+    // ── Build fresh marker set (deduplication via Map)
+    final newMarkers = <MarkerId, Marker>{};
 
-      if (_pickupLatLng != null) {
-        _markers.add(Marker(
-          markerId: const MarkerId('pickup'),
-          position: _pickupLatLng!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: const InfoWindow(title: 'Pickup Location'),
-        ));
-      }
+    newMarkers[const MarkerId('driver')] = Marker(
+      markerId: const MarkerId('driver'),
+      position: latLng,
+      rotation: pos.heading,
+      icon: laariIcon,
+      anchor: const Offset(0.5, 0.5),
+      infoWindow: const InfoWindow(title: 'Your Location'),
+      zIndex: 2,
+    );
 
-      if (_dropLatLng != null) {
-        _markers.add(Marker(
-          markerId: const MarkerId('drop'),
-          position: _dropLatLng!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: 'Drop Location'),
-        ));
-      }
-
-      // Polylines: Path driven + Road-following route to destination
-      _polylines.clear();
-      
-      // 1. Draw the path you have already driven (gray/light line)
-      _polylines.add(Polyline(
-        polylineId: const PolylineId('route_driven'),
-        points: List<LatLng>.from(_routePoints),
-        color: Colors.grey,
-        width: 4,
-      ));
-
-      // 2. Draw the MAIN ROAD ROUTE (The blue Directions line)
-      if (_fullRoutePoints.isNotEmpty) {
-        print('DEBUG [DriverApp]: Rendering road-following route with ${_fullRoutePoints.length} points');
-        _polylines.add(Polyline(
-          polylineId: const PolylineId('route_full'),
-          points: _fullRoutePoints,
-          color: const Color(0xFF185A9D), 
-          width: 8, 
-          jointType: JointType.round,
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
-          geodesic: true,
-        ));
-      }
-
-      _locationUpdateCount++;
-    });
-
-    // Smoothly follow driver on map (only if close to truck)
-    _mapController?.animateCamera(CameraUpdate.newLatLng(latLng));
-
-    // ONE-TIME Camera fit for the whole route
-    if (_locationUpdateCount == 1 && _pickupLatLng != null && _dropLatLng != null) {
-      LatLngBounds bounds;
-      if (_pickupLatLng!.latitude > _dropLatLng!.latitude) {
-        bounds = LatLngBounds(southwest: _dropLatLng!, northeast: _pickupLatLng!);
-      } else {
-        bounds = LatLngBounds(southwest: _pickupLatLng!, northeast: _dropLatLng!);
-      }
-      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+    if (_pickupLatLng != null) {
+      newMarkers[const MarkerId('pickup')] = Marker(
+        markerId: const MarkerId('pickup'),
+        position: _pickupLatLng!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        infoWindow: const InfoWindow(title: 'Pickup Location'),
+      );
     }
 
-    // Update ETA and Distance every 1 minute
-    if (_dropLatLng != null && (_lastEtaUpdate == null || DateTime.now().difference(_lastEtaUpdate!).inMinutes >= 1)) {
+    if (_dropLatLng != null) {
+      newMarkers[const MarkerId('drop')] = Marker(
+        markerId: const MarkerId('drop'),
+        position: _dropLatLng!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: const InfoWindow(title: 'Drop Location'),
+      );
+    }
+
+    // ── Build fresh polyline set
+    final newPolylines = <PolylineId, Polyline>{};
+
+    if (_fullRoutePoints.isNotEmpty) {
+      newPolylines[const PolylineId('route_full')] = Polyline(
+        polylineId: const PolylineId('route_full'),
+        points: _fullRoutePoints,
+        color: const Color(0xFF185A9D),
+        width: 8,
+        jointType: JointType.round,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+        geodesic: true,
+      );
+    }
+
+    _safeSetState(() {
+      _markers
+        ..clear()
+        ..addAll(newMarkers.values);
+      _polylines
+        ..clear()
+        ..addAll(newPolylines.values);
+    });
+
+    // ── Camera: follow every 3rd update to reduce jitter
+    if (_locationUpdateCount % 3 == 1) {
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: latLng, zoom: 16, bearing: pos.heading),
+        ),
+      );
+    }
+
+    // ── ONE-TIME route fit on first fix
+    if (_locationUpdateCount == 1 && _pickupLatLng != null && _dropLatLng != null) {
+      _fitMapToRoute();
+    }
+
+    // ── Dynamic route recalculation: if driver deviated >200m from planned route
+    if (_fullRoutePoints.isNotEmpty && prevLatLng != null) {
+      final distFromRoute = _minDistanceFromRoute(latLng);
+      final sinceLastRecalc = _lastRouteRecalc == null
+          ? const Duration(minutes: 999)
+          : DateTime.now().difference(_lastRouteRecalc!);
+      if (distFromRoute > 200 && sinceLastRecalc.inSeconds > 30) {
+        _lastRouteRecalc = DateTime.now();
+        _fetchCoordinates();
+      }
+    }
+
+    // ── ETA update every 2 minutes
+    final sinceEta = _lastEtaUpdate == null
+        ? const Duration(minutes: 999)
+        : DateTime.now().difference(_lastEtaUpdate!);
+    if (sinceEta.inMinutes >= 2) {
       _updateEta(latLng);
     }
 
-    // Upload to Firestore
+    // ── Upload to Firestore (non-blocking)
     if (_tripStatus != 'completed') {
       _firestoreService
           .updateBookingLocation(
-            widget.bookingId, 
-            pos.latitude, 
-            pos.longitude, 
+            widget.bookingId,
+            pos.latitude,
+            pos.longitude,
             pos.heading,
             eta: _eta,
             distanceRemaining: _distanceRemaining,
@@ -350,6 +377,18 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           )
           .catchError((e) => debugPrint('Location update failed: $e'));
     }
+  }
+
+  /// Returns the closest distance (meters) from [pos] to any point on the planned route.
+  double _minDistanceFromRoute(LatLng pos) {
+    if (_fullRoutePoints.isEmpty) return 0;
+    double minDist = double.infinity;
+    for (final p in _fullRoutePoints) {
+      final d = Geolocator.distanceBetween(
+        pos.latitude, pos.longitude, p.latitude, p.longitude);
+      if (d < minDist) minDist = d;
+    }
+    return minDist;
   }
 
   Future<void> _updateEta(LatLng currentPos) async {
@@ -360,40 +399,45 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
     } else if (status == 'in_transit') {
       target = _dropLatLng;
     }
-    
+
     if (target == null) return;
-    
-    final geoService = GeocodingService(_apiKey);
-    final directions = await geoService.getDirectionsFromLatLng(currentPos, target);
-    
-    if (directions != null && mounted) {
-      setState(() {
-        _eta = directions['duration'] ?? '--';
-        _distanceRemaining = directions['distance'] ?? '--';
-        _distanceRemainingMeters = directions['distanceValue'];
-        _lastEtaUpdate = DateTime.now();
-      });
+
+    try {
+      final geoService = GeocodingService(_apiKey);
+      final directions = await geoService.getDirectionsFromLatLng(currentPos, target);
+
+      if (directions != null && _isMounted) {
+        _safeSetState(() {
+          _eta = directions['duration'] ?? '--';
+          _distanceRemaining = directions['distance'] ?? '--';
+          _distanceRemainingMeters = directions['distanceValue'];
+          _lastEtaUpdate = DateTime.now();
+        });
+      }
+    } catch (e) {
+      debugPrint('ETA update failed: $e');
     }
   }
 
   // ── Real-time booking status listener ─────────────────────────────────
   void _listenToBookingUpdates() {
+    // Guard: cancel any existing sub before opening new one
+    _bookingSub?.cancel();
     _bookingSub = FirebaseFirestore.instance
         .collection('bookings')
         .doc(widget.bookingId)
         .snapshots()
         .listen((snap) {
-      if (!snap.exists || !mounted) return;
+      if (!snap.exists || !_isMounted) return;
       final data = snap.data()!;
-      final newStatus = data['status'] ?? _tripStatus;
-      
+      final newStatus = (data['status'] ?? _tripStatus) as String;
+
       final oldStatus = _tripStatus;
-      setState(() {
+      _safeSetState(() {
         _tripStatus = newStatus;
         if (data['otp'] != null) {
           _correctOtp = data['otp'].toString();
         }
-        // Refresh addresses if they were missing
         if (_pickup == 'Unknown pickup' || _pickup.isEmpty) {
           _pickup = data['pickupAddress'] ?? data['route'] ?? 'Unknown pickup';
         }
@@ -402,13 +446,13 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
         }
       });
 
+      // Recalculate route only on status change (not every Firestore tick)
       if (newStatus != oldStatus) {
+        _lastRouteRecalc = null; // Allow immediate recalc
         _fetchCoordinates();
-        if (_driverLatLng != null) {
-          _updateEta(_driverLatLng!);
-        }
+        if (_driverLatLng != null) _updateEta(_driverLatLng!);
       }
-    });
+    }, onError: (e) => debugPrint('Booking listener error: $e'));
   }
 
   // ── Trip status actions ───────────────────────────────────────────────
