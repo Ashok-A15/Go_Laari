@@ -273,7 +273,8 @@ class _MapScreenState extends State<MapScreen> {
                 polylines: allPolylines,
                 myLocationEnabled: true,
                 myLocationButtonEnabled: true,
-                mapType: MapType.normal,
+                mapType: widget.mapType,
+                trafficEnabled: widget.trafficEnabled,
               ),
             ),
     );

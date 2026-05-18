@@ -60,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen>
   // ── BOOKING WORKFLOW STATE ────────────────────
   bool _isSearching = false;
   MapType _currentMapType = MapType.normal;
+  bool _trafficEnabled = false;
   String? _pickupAddress;
   String? _dropAddress;
   final _pickupController = TextEditingController();
@@ -604,11 +605,17 @@ class _HomeScreenState extends State<HomeScreen>
             return Stack(
             children: [
               // ── BACKGROUND MAP ───────────────────────────
-              Positioned.fill(
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: -30,
                 child: MapScreen(
                   initialPosition: _currentPosition,
                   markers: _markers.union(_driverMarkers),
                   polylines: _polylines,
+                  mapType: _currentMapType,
+                  trafficEnabled: _trafficEnabled,
                   onMapCreated: (c) => _mapController = c,
                 ),
               ),
@@ -639,16 +646,8 @@ class _HomeScreenState extends State<HomeScreen>
                   child: Column(
                     children: [
                       _mapActionBtn(
-                        icon: _currentMapType == MapType.normal
-                            ? Icons.layers_rounded
-                            : Icons.map_rounded,
-                        onTap: () {
-                          setState(() {
-                            _currentMapType = _currentMapType == MapType.normal
-                                ? MapType.satellite
-                                : MapType.normal;
-                          });
-                        },
+                        icon: Icons.layers_rounded,
+                        onTap: () => _showMapTypeBottomSheet(context),
                       ),
                       const SizedBox(height: 12),
                       _mapActionBtn(
@@ -896,12 +895,8 @@ class _HomeScreenState extends State<HomeScreen>
           child: Column(
             children: [
               _mapActionBtn(
-                icon: _currentMapType == MapType.normal ? Icons.layers_rounded : Icons.map_rounded,
-                onTap: () {
-                  setState(() {
-                    _currentMapType = _currentMapType == MapType.normal ? MapType.satellite : MapType.normal;
-                  });
-                },
+                icon: Icons.layers_rounded,
+                onTap: () => _showMapTypeBottomSheet(context),
               ),
               const SizedBox(height: 12),
               _mapActionBtn(
@@ -1391,6 +1386,7 @@ class _HomeScreenState extends State<HomeScreen>
               _dropController.clear();
               _pickupAddress = '';
               _dropAddress = '';
+              _activeField = 'pickup';
             });
           },
           child: Container(
@@ -1481,7 +1477,12 @@ class _HomeScreenState extends State<HomeScreen>
                                 onPressed: _determinePosition,
                               ),
                               onChanged: (v) => _fetchSuggestions(v, true),
-                              onFocusChange: (f) => setState(() => _pickupFocused = f),
+                              onFocusChange: (f) {
+                                setState(() {
+                                  _pickupFocused = f;
+                                  if (f) _activeField = 'pickup';
+                                });
+                              },
                             ),
                             Divider(height: 1, indent: 48, color: AppColors.border),
                             _inputRow(
@@ -1490,7 +1491,12 @@ class _HomeScreenState extends State<HomeScreen>
                               icon: Icons.location_on_rounded,
                               iconColor: AppColors.error,
                               onChanged: (v) => _fetchSuggestions(v, false),
-                              onFocusChange: (f) => setState(() => _dropFocused = f),
+                              onFocusChange: (f) {
+                                setState(() {
+                                  _dropFocused = f;
+                                  if (f) _activeField = 'drop';
+                                });
+                              },
                             ),
                           ],
                         ),
@@ -1519,14 +1525,6 @@ class _HomeScreenState extends State<HomeScreen>
                             onTap: () => _onSuggestionSelected(p['description']),
                           );
                         },
-                      )
-                    else if (_predictions.isEmpty)
-                      Column(
-                        children: [
-                          const SizedBox(height: 10),
-                          _suggestionItem('Mysore Railway Station', 'Pedestrian Overpass, Medar Block...'),
-                          _suggestionItem('1 New Kantharaj Urs Rd', 'CFTRI Layout Sharad...'),
-                        ],
                       ),
                     
                     const SizedBox(height: 20),
@@ -1537,7 +1535,7 @@ class _HomeScreenState extends State<HomeScreen>
 
             // ── BOTTOM BUTTONS (FIXED AT BOTTOM)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1596,23 +1594,6 @@ class _HomeScreenState extends State<HomeScreen>
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
-    );
-  }
-
-  Widget _suggestionItem(String title, String subtitle) {
-    return ListTile(
-      leading: const Icon(Icons.history_rounded, size: 20),
-      title: Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
-      onTap: () {
-        if (_activeField == 'pickup') {
-          _pickupController.text = title;
-        } else {
-          _dropController.text = title;
-        }
-        setState(() => _predictions.clear());
-        _updateMapRoute();
-      },
     );
   }
 
