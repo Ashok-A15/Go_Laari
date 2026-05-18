@@ -88,6 +88,11 @@ class _HomeScreenState extends State<HomeScreen>
   String? _driverLorryNo;
   String? _driverLorryModel;
 
+  // ── DISPOSE GUARD ────────────────────────────────
+  bool _disposed = false;
+  bool get _isMounted => mounted && !_disposed;
+  void _safeSetState(VoidCallback fn) { if (_isMounted) setState(fn); }
+
   void _fetchDriverDetails(String driverId) async {
     if (_loadedDriverId == driverId) return;
     _loadedDriverId = driverId;
@@ -162,10 +167,12 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _disposed = true;
     _animController.dispose();
     _pickupController.dispose();
     _dropController.dispose();
     _driversAroundSub?.cancel();
+    _debounce?.cancel();
     super.dispose();
   }
 
