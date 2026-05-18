@@ -255,31 +255,25 @@ class _MapScreenState extends State<MapScreen> {
       ) : null,
       body: _currentP == null
           ? const Center(child: CircularProgressIndicator())
-          : Animarker(
-              mapId: _controller.future.then<int>((value) => value.mapId),
-              curve: Curves.ease,
-              duration: const Duration(milliseconds: 2000),
-              markers: allMarkers,
-              child: GoogleMap(
-                onMapCreated: (GoogleMapController controller) {
-                  _controller.complete(controller);
-                  if (widget.onMapCreated != null) {
-                    widget.onMapCreated!(controller);
-                  }
-                  _cameraToPosition(_currentP!);
-                },
-                initialCameraPosition: CameraPosition(
-                  target: _currentP!,
-                  zoom: 13,
-                ),
-                padding: widget.padding ?? EdgeInsets.zero,
-                markers: allMarkers,
-                polylines: allPolylines,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: true,
-                mapType: widget.mapType,
-                trafficEnabled: widget.trafficEnabled,
+          : GoogleMap(
+              onMapCreated: (GoogleMapController controller) {
+                _controller.complete(controller);
+                if (widget.onMapCreated != null) {
+                  widget.onMapCreated!(controller);
+                }
+                _cameraToPosition(_currentP!);
+              },
+              initialCameraPosition: CameraPosition(
+                target: _currentP!,
+                zoom: 13,
               ),
+              padding: widget.padding ?? EdgeInsets.zero,
+              markers: allMarkers,
+              polylines: allPolylines,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              mapType: widget.mapType,
+              trafficEnabled: widget.trafficEnabled,
             ),
     );
   }

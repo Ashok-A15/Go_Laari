@@ -663,37 +663,31 @@ class _LiveTrackingPageState extends State<LiveTrackingPage>
           ValueListenableBuilder<double>(
             valueListenable: _panelHeightNotifier,
             builder: (context, heightFactor, child) {
-              return Animarker(
-                mapId: _completer.future.then<int>((value) => value.mapId),
-                curve: Curves.ease,
-                duration: const Duration(milliseconds: 2000),
-                markers: _markers,
-                child: GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _driverLatLng ?? const LatLng(12.3077, 76.6533),
-                    zoom: 16,
-                  ),
-                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * heightFactor),
-                  markers: _markers,
-                  polylines: _polylines,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: true,
-                  zoomControlsEnabled: false,
-                  compassEnabled: true,
-                  mapType: MapType.normal,
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    if (!_completer.isCompleted) {
-                      _completer.complete(controller);
-                    }
-                    if (_pickupLatLng != null && _dropLatLng != null) {
-                      _fitMapToRoute();
-                    } else if (_driverLatLng != null) {
-                      controller.animateCamera(
-                          CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
-                    }
-                  },
+              return GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: _driverLatLng ?? const LatLng(12.3077, 76.6533),
+                  zoom: 16,
                 ),
+                padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * heightFactor),
+                markers: _markers,
+                polylines: _polylines,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
+                zoomControlsEnabled: false,
+                compassEnabled: true,
+                mapType: MapType.normal,
+                onMapCreated: (controller) {
+                  _mapController = controller;
+                  if (!_completer.isCompleted) {
+                    _completer.complete(controller);
+                  }
+                  if (_pickupLatLng != null && _dropLatLng != null) {
+                    _fitMapToRoute();
+                  } else if (_driverLatLng != null) {
+                    controller.animateCamera(
+                        CameraUpdate.newLatLngZoom(_driverLatLng!, 16));
+                  }
+                },
               );
             }
           ),
