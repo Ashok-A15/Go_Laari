@@ -18,6 +18,8 @@ class MapScreen extends StatefulWidget {
   final LatLng? driverLocation;
   final double? driverHeading;
   final EdgeInsets? padding;
+  final MapType mapType;
+  final bool trafficEnabled;
 
   const MapScreen({
     super.key,
@@ -30,6 +32,8 @@ class MapScreen extends StatefulWidget {
     this.driverLocation,
     this.driverHeading,
     this.padding,
+    this.mapType = MapType.normal,
+    this.trafficEnabled = false,
   });
 
   @override

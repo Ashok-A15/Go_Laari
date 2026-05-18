@@ -544,6 +544,134 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  void _showMapTypeBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Select Map Type",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _mapTypeOption(
+                          type: MapType.normal,
+                          label: "Default",
+                          icon: Icons.map_outlined,
+                          setModalState: setModalState,
+                        ),
+                        _mapTypeOption(
+                          type: MapType.satellite,
+                          label: "Satellite",
+                          icon: Icons.satellite_outlined,
+                          setModalState: setModalState,
+                        ),
+                        _mapTypeOption(
+                          type: MapType.hybrid,
+                          label: "Terrain",
+                          icon: Icons.terrain_outlined,
+                          setModalState: setModalState,
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 30),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.traffic_rounded, color: Colors.grey),
+                            SizedBox(width: 12),
+                            Text(
+                              "Show Traffic",
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ],
+                        ),
+                        Switch(
+                          value: _trafficEnabled,
+                          activeColor: AppColors.primary,
+                          onChanged: (bool value) {
+                            setState(() {
+                              _trafficEnabled = value;
+                            });
+                            setModalState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _mapTypeOption({
+    required MapType type,
+    required String label,
+    required IconData icon,
+    required StateSetter setModalState,
+  }) {
+    final isSelected = _currentMapType == type;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentMapType = type;
+        });
+        setModalState(() {});
+      },
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.grey[100],
+              border: Border.all(
+                color: isSelected ? AppColors.primary : Colors.transparent,
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              icon,
+              color: isSelected ? AppColors.primary : Colors.grey[600],
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? AppColors.primary : Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmMapLocation() async {
     // Get the center of the map
     final center = await _mapController?.getVisibleRegion();
